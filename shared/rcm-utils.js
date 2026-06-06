@@ -1,5 +1,5 @@
 /* ─── RCM Platform — Data Utility Layer ────────────────────────────────────
-   Rapid Capital Management | rcm-utils.js v1.1
+   Rapid Capital Management | rcm-utils.js v1.2
 
    ARCHITECTURE:
    Layer 1 (Cowork)    — window.cowork.callMcpTool() — IB MCP + FMP MCP
@@ -528,7 +528,8 @@ RCM.buildHeader = (opts = {}) => {
       <nav class="rcm-header-nav">
         ${navLinks.map(l => `<a href="${l.href}" class="rcm-nav-link${activePage === l.key ? ' active' : ''}">${l.label}</a>`).join('')}
       </nav>
-      <div id="rcm-source-badge" class="source-badge off">Init</div>
+      <div id="rcm-source-badge" class="source-badge off" onclick="RCM.openSettingsModal()" title="Data feed settings" style="cursor:pointer;">Init</div>
+      <button class="rcm-settings-btn" onclick="RCM.openSettingsModal()" title="Data feed settings" aria-label="Settings">⚙</button>
     </div>
   </header>`;
 };
@@ -581,4 +582,153 @@ RCM.promptFmpKey = () => {
       style="margin-left:auto;padding:5px 10px;background:transparent;border:1px solid #0B1D3A;border-radius:3px;cursor:pointer;font-size:11px;">✕</button>`;
 
   document.body.prepend(div);
+};
+
+/* ── Data Feed Settings Modal ─────────────────────────────────────────── */
+RCM.openSettingsModal = async () => {
+  // Remove any existing modal
+  const existing = document.getElementById('rcm-settings-overlay');
+  if (existing) { existing.remove(); return; }
+
+  // Determine current source
+  const src = await RCM.getSourceStatus();
+  const srcLabel = { ib: 'IB Live (Cowork)', td: 'TwelveData REST', fmp: 'FMP REST', off: 'Offline' }[src] || 'Unknown';
+  const srcColor = { ib: '#4CAF50', td: '#C9A14A', fmp: '#C9A14A', off: '#666' }[src] || '#666';
+
+  const tdKey  = RCM.getTdKey();
+  const fmpKey = RCM.getFmpKey();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'rcm-settings-overlay';
+  overlay.style.cssText = `
+    position: fixed; inset: 0; background: rgba(11,29,58,.72);
+    z-index: 10000; display: flex; align-items: flex-start;
+    justify-content: flex-end; padding: 60px 20px 0 0;
+  `;
+
+  overlay.innerHTML = `
+    <div id="rcm-settings-panel" style="
+      background: #0B1D3A; border: 1px solid rgba(201,161,74,.4);
+      border-radius: 10px; width: 380px; max-width: calc(100vw - 40px);
+      box-shadow: 0 16px 48px rgba(0,0,0,.5); overflow: hidden;
+      font-family: 'Segoe UI', sans-serif; color: #E0E0E0;
+    ">
+      <!-- Header -->
+      <div style="background:#0d2244;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(201,161,74,.25);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:15px;">⚙</span>
+          <span style="font-size:13px;font-weight:700;letter-spacing:.5px;color:#fff;">Data Feed Settings</span>
+        </div>
+        <button onclick="document.getElementById('rcm-settings-overlay').remove();"
+          style="background:none;border:none;color:#aaa;cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;" title="Close">✕</button>
+      </div>
+
+      <!-- Active Feed Status -->
+      <div style="padding:16px 18px 12px;border-bottom:1px solid rgba(255,255,255,.07);">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:10px;">Active Feed</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:10px;height:10px;border-radius:50%;background:${srcColor};flex-shrink:0;"></div>
+          <span style="font-size:14px;font-weight:700;color:#fff;">${srcLabel}</span>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:#8898aa;line-height:1.5;">
+          ${src === 'ib' ? '✓ Interactive Brokers MCP — live bid/ask streaming via Cowork.' :
+            src === 'td' ? '↻ TwelveData REST — polled on page load &amp; manual refresh. <strong style="color:#C9A14A;">Not live streaming.</strong>' :
+            src === 'fmp' ? '↻ Financial Modeling Prep REST — polled on page load &amp; manual refresh.' :
+            '⚠ No data source configured. Enter a TwelveData API key below.'}
+        </div>
+        ${src !== 'ib' ? `<div style="margin-top:6px;font-size:10px;color:#666;font-style:italic;">Streaming requires IB via Cowork mode · Free APIs are REST-only</div>` : ''}
+      </div>
+
+      <!-- TwelveData Key -->
+      <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07);">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:8px;">
+          TwelveData API Key
+          <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#556;margin-left:6px;">
+            — <a href="https://twelvedata.com" target="_blank" style="color:#C9A14A;text-decoration:none;">Get free key ↗</a> (800 req/day)
+          </span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="sett-td-key" type="text"
+            value="${tdKey ? tdKey.slice(0,8) + '••••••••' : ''}"
+            placeholder="${tdKey ? 'Key saved ✓ — paste to update' : 'Paste TwelveData API key…'}"
+            onfocus="if(this.dataset.masked){this.value='';delete this.dataset.masked;}"
+            data-masked="${tdKey ? '1' : ''}"
+            style="flex:1;padding:7px 10px;border-radius:4px;border:1px solid rgba(201,161,74,.3);
+              background:rgba(255,255,255,.05);color:#fff;font-size:12px;outline:none;"
+          >
+          <button onclick="(function(){
+              const el=document.getElementById('sett-td-key');
+              if(el.dataset.masked) return;
+              const val=el.value.trim();
+              if(!val){alert('Enter a TwelveData key first.');return;}
+              RCM.setTdKey(val);
+              el.value=val.slice(0,8)+'••••••••';
+              el.dataset.masked='1';
+              document.getElementById('rcm-settings-overlay').remove();
+              location.reload();
+            })()"
+            style="padding:7px 14px;background:#C9A14A;color:#0B1D3A;border:none;border-radius:4px;
+              cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">Save</button>
+        </div>
+        ${tdKey ? `<button onclick="RCM.setTdKey('');document.getElementById('rcm-settings-overlay').remove();location.reload();"
+          style="margin-top:6px;background:none;border:none;color:#666;cursor:pointer;font-size:10px;text-decoration:underline;padding:0;">
+          Remove TwelveData key</button>` : ''}
+      </div>
+
+      <!-- FMP Key -->
+      <div style="padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.07);">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:8px;">
+          FMP API Key <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#556;">(fallback)</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="sett-fmp-key" type="text"
+            value="${fmpKey ? fmpKey.slice(0,8) + '••••••••' : ''}"
+            placeholder="${fmpKey ? 'Key saved ✓ — paste to update' : 'Paste FMP API key…'}"
+            onfocus="if(this.dataset.masked){this.value='';delete this.dataset.masked;}"
+            data-masked="${fmpKey ? '1' : ''}"
+            style="flex:1;padding:7px 10px;border-radius:4px;border:1px solid rgba(255,255,255,.15);
+              background:rgba(255,255,255,.05);color:#fff;font-size:12px;outline:none;"
+          >
+          <button onclick="(function(){
+              const el=document.getElementById('sett-fmp-key');
+              if(el.dataset.masked) return;
+              const val=el.value.trim();
+              if(!val){alert('Enter an FMP key first.');return;}
+              RCM.setFmpKey(val);
+              el.value=val.slice(0,8)+'••••••••';
+              el.dataset.masked='1';
+              document.getElementById('rcm-settings-overlay').remove();
+              location.reload();
+            })()"
+            style="padding:7px 14px;background:rgba(255,255,255,.1);color:#ccc;border:1px solid rgba(255,255,255,.15);
+              border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;white-space:nowrap;">Save</button>
+        </div>
+        ${fmpKey ? `<button onclick="RCM.setFmpKey('');document.getElementById('rcm-settings-overlay').remove();location.reload();"
+          style="margin-top:6px;background:none;border:none;color:#666;cursor:pointer;font-size:10px;text-decoration:underline;padding:0;">
+          Remove FMP key</button>` : ''}
+      </div>
+
+      <!-- Feed Priority Explainer -->
+      <div style="padding:12px 18px;border-bottom:1px solid rgba(255,255,255,.07);">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#888;margin-bottom:8px;">Feed Priority</div>
+        <div style="font-size:11px;color:#6a7f9c;line-height:1.7;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:#4CAF50;font-weight:700;">①</span> IB via Cowork — live bid/ask</div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:#C9A14A;font-weight:700;">②</span> TwelveData REST — FX + equities + crypto</div>
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:#888;font-weight:700;">③</span> FMP REST — equities/ETFs only</div>
+        </div>
+      </div>
+
+      <!-- Footer note -->
+      <div style="padding:10px 18px;text-align:center;">
+        <span style="font-size:10px;color:#444;">Keys stored locally in browser · never sent to RCM servers</span>
+      </div>
+    </div>
+  `;
+
+  // Close on overlay click (outside panel)
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
 };
