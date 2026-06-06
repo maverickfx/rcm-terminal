@@ -4,7 +4,8 @@
 **Owner:** Andrew Han — Rapid Capital Management
 **Build Environment:** Claude Cowork (primary) | Replit (secondary)
 **Repo:** HFOS/03_TRADE_OPERATIONS/GITHUB/rcm-terminal
-**Deploy Target:** Cloudflare Pages + Cloudflare Access
+**Deploy Target:** Cloudflare Workers + Cloudflare Access
+**Live URL:** https://rcm-terminal.ahanx8.workers.dev
 
 ---
 
@@ -25,15 +26,18 @@
 
 ### Core Infrastructure
 - [x] Define platform architecture (Pre-Market → Analysis → Decision → Execution → Feedback)
-- [x] Resolve GitHub Pages private repo issue → **Solution: Cloudflare Pages + Access (free)**
-- [x] Establish two-layer data model: IB MCP (Cowork) / FMP REST (universal)
+- [x] Resolve GitHub Pages private repo issue → **Solution: Cloudflare Workers + Access (free)** *(not Pages — Pages not available)*
+- [x] Establish three-layer data model: IB MCP (Cowork) / TwelveData REST (browser primary) / FMP REST (fallback)
 - [x] Map all IB MCP tools (11 tools, server ID documented)
 - [x] Map all FMP MCP tools
 - [x] Design RCM brand token system for platform (navy/gold/risk/trade)
+- [x] Add TwelveData REST as Layer 2 (800 req/day free, FX + equities + crypto)
+- [x] Data feed settings modal (⚙ button) — key management, source status, feed priority UI
 
 ### Shared Modules
-- [x] `shared/rcm-style.css` — Full brand stylesheet, all tokens, print CSS
-- [x] `shared/rcm-utils.js` — Two-layer data utility, IB MCP + FMP fallback, formatters, header/footer
+- [x] `shared/rcm-style.css` — Full brand stylesheet, all tokens, print CSS; brand lockup CSS (`.rcm-brand-lockup`)
+- [x] `shared/rcm-utils.js` — Three-layer data utility (IB→TD→FMP), `buildHeader` with `brandProduct` param, settings modal, source badge
+- [x] `wrangler.toml` — Workers Assets config; enables `npx wrangler deploy` via Cloudflare CI
 
 ---
 
@@ -42,9 +46,14 @@
 
 ### Platform Pages
 - [x] `index.html` — Main dashboard: tool nav cards, account KPIs, market watch (10 symbols), positions table
-- [x] `terminal/index.html` — Full charting terminal: LightCharts v4.2, TF selector, chart types, sync volume, IV overlay, watchlist, OHLC sidebar
+- [x] `terminal/index.html` — Full charting terminal: LightCharts v4.2, TF selector, chart types, sync volume, IV overlay, watchlist, OHLC sidebar; **RAPID TERMINAL** brand lockup
 - [x] `trade-setup/index.html` — Trade Setup Generator: 6 instrument schemas (FX, CFD, Futures, Equity, EqOpt, FutOpt), auto-calcs, MT4 bridge
 - [x] `quant-systems/index.html` — Tech Stack Reference Card (this document's companion)
+
+### Branding
+- [x] **RAPID TERMINAL** compound brand mark — Bloomberg Terminal-style lockup (bold white RAPID + separator + gold TERMINAL)
+- [x] `buildHeader({ brandProduct: 'TERMINAL' })` pattern — reusable for any sub-product brand mark
+- [x] Page title updated to `RAPID TERMINAL — RCM`
 
 ### Pending Phase 2
 - [ ] `options/index.html` — IV Percentile Scanner
@@ -102,23 +111,26 @@
 ---
 
 ## PHASE 4 — Deployment & Auth
-*Target: Week 3 · Status: 🔲 Pending (User Action Required)*
+*Target: Week 3 · Status: 🔄 Partially Complete*
 
-### Cloudflare Pages Setup
-- [ ] Create Cloudflare account (free)
-- [ ] Connect GitHub repo `rcm-terminal` to Cloudflare Pages
-  - Build command: *(none — static site)*
-  - Build output: `/` (root)
-- [ ] Test auto-deploy on next GitHub push
+### Cloudflare Workers Setup ✅
+- [x] Cloudflare Workers account connected — **Workers only, Pages not available**
+- [x] GitHub repo `rcm-terminal` connected to Cloudflare CI
+  - Deploy command: `npx wrangler deploy`
+  - Branch: `main`
+- [x] `wrangler.toml` created — `[assets] directory = "./"` with SPA fallback
+- [x] Auto-deploy on push confirmed working — `https://rcm-terminal.ahanx8.workers.dev` is live
+- [x] Git auth via GitHub Desktop (Google OAuth account — no password/PAT needed)
 
-### Cloudflare Access (Auth Gate)
-- [ ] Enable Cloudflare Access on the Pages app
+### Cloudflare Access (Auth Gate) 🔲
+- [ ] Enable Cloudflare Access on the Workers route
 - [ ] Create policy: Email OTP → allow `ahanx8@gmail.com`
 - [ ] Test login from mobile browser (cross-device verification)
 
 ### Configuration Files
+- [x] `wrangler.toml` committed to repo
 - [ ] Add `.gitignore` (exclude any local config files with keys)
-- [ ] Update `README.md` with platform overview and Cloudflare setup steps
+- [ ] Update `README.md` with platform overview and Workers setup steps
 
 ---
 
@@ -177,15 +189,21 @@
 
 ## Deployment Log
 
-| Date | Version | Changes | Deployed By |
-|------|---------|---------|------------|
-| 2026-06-06 | v0.1.0 | Initial build — dashboard, terminal, trade-setup, quant-systems | Claude Cowork |
+| Date | Commit | Version | Changes | Status |
+|------|--------|---------|---------|--------|
+| 2026-06-06 | `822f4fe` | v0.1.0 | Initial build — dashboard, terminal, trade-setup, quant-systems | ✅ Deployed |
+| 2026-06-06 | `4fe6b0b` | v0.1.1 | Fix: `promptFmpKey` added to terminal; duplicate watchlist call removed | ✅ Deployed |
+| 2026-06-06 | `6b38139` | v0.2.0 | Brand: RAPID TERMINAL lockup — `buildHeader` + brand lockup CSS | ✅ Deployed |
+| 2026-06-06 | `4bd4538` | v0.2.1 | Fix: `wrangler.toml` added — CI deploys now work; TwelveData Layer 2 | ✅ Deployed |
 
 ---
 
 ## Notes
 
-- **IB MCP is Cowork-only**: When accessed via Cloudflare URL (browser), all IB features degrade gracefully to FMP REST or "not available" message. Design intent: platform works 100% in Cowork; ~80% in browser.
+- **Data feed priority**: IB MCP (Cowork) → TwelveData REST (browser primary) → FMP REST (fallback). TwelveData free tier = 800 req/day; add key via ⚙ settings button. Design intent: platform works 100% in Cowork; ~80% in browser.
+- **IB MCP is Cowork-only**: When accessed via Cloudflare URL, IB features degrade gracefully to TwelveData/FMP or "not available" message.
 - **MT4 Bridge is local-only**: File bridge reads/writes only work when MT4 is running on the same machine as the HFOS folder. Remote use requires a different approach (e.g., Axi API if available).
-- **FMP API key**: Andrew must add his FMP API key on first browser load. Key persists in localStorage until cleared.
-- **Chart data**: IB MCP provides full OHLCV history for all asset classes. FMP REST provides equity/ETF/FX history. For futures not on FMP, Terminal shows "IB required" in standalone mode.
+- **API keys**: Stored in browser `localStorage` only — never sent to RCM servers. Add via ⚙ settings modal on any page.
+- **Cloudflare Workers — NOT Pages**: Deployment is via `npx wrangler deploy` with `wrangler.toml`. Cloudflare Pages is not available on this account. Do not suggest or attempt Pages-based deployment.
+- **GitHub auth**: Account uses Google OAuth — no password/PAT. Use GitHub Desktop for all git push operations.
+- **Chart data**: IB MCP provides full OHLCV history for all asset classes. TwelveData covers FX/equities/crypto. FMP REST covers equities/ETFs. For futures not covered by REST APIs, Terminal shows "IB required" in standalone mode.
