@@ -496,7 +496,7 @@ const RCM = (() => {
 
 /* ── RCM Header builder ── */
 RCM.buildHeader = (opts = {}) => {
-  const { title = '', subtitle = '', activePage = '' } = opts;
+  const { title = '', subtitle = '', activePage = '', brandProduct = '' } = opts;
   const navLinks = [
     { href: '../index.html',              label: 'Dashboard',     key: 'dashboard' },
     { href: '../terminal/index.html',     label: 'Terminal',      key: 'terminal' },
@@ -505,6 +505,20 @@ RCM.buildHeader = (opts = {}) => {
     { href: '../journal/index.html',      label: 'Journal',       key: 'journal' },
     { href: '../quant-systems/index.html',label: 'Quant Systems', key: 'quantsystems' },
   ];
+
+  // Brand lockup (e.g. RAPID TERMINAL) vs standard wordmark + title
+  const leftSection = brandProduct
+    ? `<div class="rcm-brand-lockup">
+        <span class="rbl-firm">RAPID</span>
+        <span class="rbl-sep"></span>
+        <span class="rbl-product">${brandProduct.toUpperCase()}</span>
+      </div>`
+    : `<div class="rcm-wordmark">
+        <span class="line1">Rapid Capital</span>
+        <span class="line2">Management</span>
+      </div>
+      <div class="rcm-header-divider"></div>
+      <div class="rcm-header-title">${title}</div>`;
 
   return `
   <header class="rcm-header">
@@ -518,12 +532,7 @@ RCM.buildHeader = (opts = {}) => {
         <polygon points="10.5,22 22,22 16.25,13" fill="#C0392B"/>
       </svg>
     </div>
-    <div class="rcm-wordmark">
-      <span class="line1">Rapid Capital</span>
-      <span class="line2">Management</span>
-    </div>
-    <div class="rcm-header-divider"></div>
-    <div class="rcm-header-title">${title}</div>
+    ${leftSection}
     <div class="rcm-header-right">
       <nav class="rcm-header-nav">
         ${navLinks.map(l => `<a href="${l.href}" class="rcm-nav-link${activePage === l.key ? ' active' : ''}">${l.label}</a>`).join('')}

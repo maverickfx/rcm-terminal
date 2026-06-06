@@ -77,6 +77,36 @@ body {
   line-height: 1.2;
 }
 
+/* ── RAPID TERMINAL / RAPID [PRODUCT] brand lockup ── */
+.rcm-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.rbl-firm {
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: #fff;
+  text-transform: uppercase;
+}
+.rbl-sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255,255,255,.28);
+  flex-shrink: 0;
+}
+.rbl-product {
+  font-family: 'Montserrat', 'Segoe UI', sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+
 .rcm-header-divider {
   width: 1px;
   height: 28px;
