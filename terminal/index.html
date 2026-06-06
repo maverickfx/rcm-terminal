@@ -372,30 +372,36 @@ async function loadChart() {
   document.getElementById('price-chg').textContent = '';
 
   try {
-    // Clear existing series
-    if (mainSeries) { try { mainChart.removeSeries(mainSeries); } catch {} }
-    if (volSeries)  { try { volChart.removeSeries(volSeries);   } catch {} }
-
-    // Fetch bars
+    // Fetch bars BEFORE clearing series — keep old chart alive if fetch fails
     const bars = await RCM.history(sym, currentTf, 300);
     if (!bars.length) throw new Error('No data returned');
 
     // Convert time strings → Unix timestamps
+    // Handles: Unix numbers, ISO "YYYY-MM-DDTHH:MM:SS", and TwelveData's
+    // "YYYY-MM-DD HH:MM:SS" (space separator — Invalid Date in Safari without fix)
     const toTs = (t) => {
       if (typeof t === 'number') return t;
-      return Math.floor(new Date(t).getTime() / 1000);
+      const s = String(t).replace(' ', 'T'); // Safari fix: space → T
+      const ms = new Date(s).getTime();
+      return isNaN(ms) ? null : Math.floor(ms / 1000);
     };
 
     const priceData = bars.map(b => ({
       time:  toTs(b.time),
       open:  b.open, high: b.high, low: b.low, close: b.close,
-    })).filter(b => b.time && b.close);
+    })).filter(b => b.time != null && b.close != null);
 
     const volData = bars.map(b => ({
       time:  toTs(b.time),
       value: b.volume ?? 0,
       color: (b.close >= b.open) ? 'rgba(26,110,46,.6)' : 'rgba(168,32,32,.6)',
-    })).filter(b => b.time);
+    })).filter(b => b.time != null);
+
+    if (!priceData.length) throw new Error('No valid bars (source: ' + (bars[0]?.source ?? '?') + ')');
+
+    // Now safe to clear existing series — data is confirmed good
+    if (mainSeries) { try { mainChart.removeSeries(mainSeries); } catch {} }
+    if (volSeries)  { try { volChart.removeSeries(volSeries);   } catch {} }
 
     // Build series per chart type
     if (currentCt === 'candlestick') {
@@ -419,6 +425,7 @@ async function loadChart() {
       mainSeries.setData(priceData.map(b => ({ time: b.time, value: b.close })));
       volSeries = volChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
       volSeries.setData(volData);
+      mainChart.timeScale().fitContent();
       finishLoad(bars);
       return;
     }
@@ -429,8 +436,6 @@ async function loadChart() {
 
     mainChart.timeScale().fitContent();
     finishLoad(bars);
-
-    document.getElementById('chart-status').textContent = '';
 
   } catch (e) {
     document.getElementById('chart-status').textContent = '⚠ ' + e.message;
@@ -466,6 +471,12 @@ function finishLoad(bars) {
   if (!bars.length) return;
   const last = bars[bars.length - 1];
   const prev = bars[bars.length - 2];
+
+  // Data source badge (shows in chart-status after successful load)
+  const src = bars[0]?.source ?? '?';
+  const srcLabel = { IB: '● IB', TD: '● TwelveData', FMP: '● FMP' }[src] ?? ('● ' + src);
+  document.getElementById('chart-status').textContent = srcLabel;
+
   document.getElementById('sb-o').textContent = RCM.fmt.price(last.open, digits);
   document.getElementById('sb-h').textContent = RCM.fmt.price(last.high, digits);
   document.getElementById('sb-l').textContent = RCM.fmt.price(last.low, digits);
