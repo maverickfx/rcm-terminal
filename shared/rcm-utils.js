@@ -1,0 +1,456 @@
+/* ─── RCM Platform — Data Utility Layer ────────────────────────────────────
+   Rapid Capital Management | rcm-utils.js v1.0
+
+   ARCHITECTURE:
+   Layer 1 (Enhanced)  — window.cowork.callMcpTool() — IB MCP + FMP MCP
+                         Available in Cowork mode only.
+   Layer 2 (Universal) — FMP REST API via fetch()
+                         Works in any browser. Key stored in localStorage.
+
+   Usage:
+     const data = await RCM.quote('EUR/USD');
+     const bars  = await RCM.history('EURUSD', '1D', 90);
+     const acct  = await RCM.account();
+──────────────────────────────────────────────────────────────────────────── */
+
+const RCM = (() => {
+
+  /* ── Cowork detection ── */
+  const isCowork = () => typeof window !== 'undefined' && !!window.cowork;
+
+  /* ── FMP API key (stored in localStorage) ── */
+  const FMP_KEY_STORAGE = 'rcm_fmp_api_key';
+  const getFmpKey = () => localStorage.getItem(FMP_KEY_STORAGE) || '';
+  const setFmpKey = (k) => localStorage.setItem(FMP_KEY_STORAGE, k);
+
+  /* ── IB MCP tool IDs ── */
+  const IB = 'mcp__c5c4b258-c195-40b0-80eb-29affac08285';
+  const FMP_MCP = 'mcp__a97bb01e-3373-4b7d-b3ec-66a6a4524ffe';
+
+  /* ── Cowork MCP helper ── */
+  const mcp = async (server, tool, args = {}) => {
+    if (!isCowork()) throw new Error('Cowork not available');
+    const toolName = `${server}__${tool}`;
+    const r = await window.cowork.callMcpTool(toolName, args);
+    if (r.isError) throw new Error(r.content?.[0]?.text || 'MCP error');
+    // Parse structured content or JSON text
+    if (r.structuredContent) return r.structuredContent;
+    const txt = r.content?.[0]?.text;
+    if (!txt) return null;
+    try { return JSON.parse(txt); } catch { return txt; }
+  };
+
+  /* ── FMP REST helper ── */
+  const fmp = async (path, params = {}) => {
+    const key = getFmpKey();
+    if (!key) throw new Error('FMP_KEY_MISSING');
+    const url = new URL(`https://financialmodelingprep.com/api${path}`);
+    url.searchParams.set('apikey', key);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`FMP ${res.status}: ${res.statusText}`);
+    return res.json();
+  };
+
+  /* ── Symbol normalisation ── */
+  // IB uses "EUR" (forex), FMP uses "EURUSD" — normalise to pair like "EURUSD"
+  const normSymbol = (sym) => sym.replace('/', '').toUpperCase();
+  const fxPair = (sym) => {
+    const s = normSymbol(sym);
+    // If 6 chars and all alpha, assume forex pair
+    if (/^[A-Z]{6}$/.test(s)) return s;
+    return s;
+  };
+
+  /* ──────────────────────────────────────────────────────────
+     PUBLIC API
+  ────────────────────────────────────────────────────────── */
+
+  /**
+   * Get real-time quote for a symbol.
+   * Returns: { symbol, bid, ask, last, change, changePct, volume, timestamp }
+   */
+  const quote = async (symbol) => {
+    const sym = normSymbol(symbol);
+
+    if (isCowork()) {
+      try {
+        const raw = await mcp(IB, 'get_price_snapshot', { symbol: sym });
+        // IB snapshot shape varies; normalise it
+        const d = Array.isArray(raw) ? raw[0] : raw;
+        return {
+          symbol: sym,
+          bid:       d?.bid ?? d?.BID ?? null,
+          ask:       d?.ask ?? d?.ASK ?? null,
+          last:      d?.last ?? d?.LAST ?? d?.close ?? null,
+          change:    d?.change ?? null,
+          changePct: d?.changePct ?? d?.changePercent ?? null,
+          volume:    d?.volume ?? null,
+          timestamp: d?.timestamp ?? Date.now(),
+          source:    'IB',
+        };
+      } catch (e) {
+        console.warn('IB quote failed, falling back to FMP:', e.message);
+      }
+    }
+
+    // FMP fallback
+    const data = await fmp('/v3/quote/' + sym);
+    const d = Array.isArray(data) ? data[0] : data;
+    if (!d) throw new Error('No quote data for ' + sym);
+    return {
+      symbol:    d.symbol,
+      bid:       d.bid ?? null,
+      ask:       d.ask ?? null,
+      last:      d.price,
+      change:    d.change,
+      changePct: d.changesPercentage,
+      volume:    d.volume,
+      timestamp: d.timestamp * 1000,
+      source:    'FMP',
+    };
+  };
+
+  /**
+   * Get OHLCV price history.
+   * timeframe: '1m','5m','15m','1H','4H','1D','1W'
+   * bars: number of bars to return
+   * Returns: [{ time, open, high, low, close, volume }]
+   */
+  const history = async (symbol, timeframe = '1D', bars = 200) => {
+    const sym = normSymbol(symbol);
+
+    if (isCowork()) {
+      try {
+        const ibPeriod = {
+          '1m':'1m', '5m':'5m', '15m':'15m', '30m':'30m',
+          '1H':'1h', '4H':'4h', '1D':'1d', '1W':'1w'
+        }[timeframe] || '1d';
+
+        const raw = await mcp(IB, 'get_price_history', {
+          symbol: sym,
+          period: ibPeriod,
+          bars,
+        });
+
+        const arr = Array.isArray(raw) ? raw : raw?.bars ?? raw?.data ?? [];
+        return arr.map(b => ({
+          time:   b.time ?? b.date ?? b.t,
+          open:   b.open ?? b.o,
+          high:   b.high ?? b.h,
+          low:    b.low  ?? b.l,
+          close:  b.close ?? b.c,
+          volume: b.volume ?? b.v ?? 0,
+          source: 'IB',
+        })).sort((a, b) => (a.time > b.time ? 1 : -1));
+      } catch (e) {
+        console.warn('IB history failed, falling back to FMP:', e.message);
+      }
+    }
+
+    // FMP fallback — choose endpoint by timeframe
+    const isIntraday = ['1m','5m','15m','30m','1H','4H'].includes(timeframe);
+    let data;
+    if (isIntraday) {
+      const fmpTf = {'1m':'1min','5m':'5min','15m':'15min','30m':'30min','1H':'1hour','4H':'4hour'}[timeframe];
+      data = await fmp(`/v3/historical-chart/${fmpTf}/${sym}`, { limit: bars });
+    } else {
+      data = await fmp(`/v3/historical-price-full/${sym}`, { timeseries: bars });
+      data = data?.historical ?? data;
+    }
+
+    const arr = Array.isArray(data) ? data : [];
+    return arr.map(b => ({
+      time:   b.date ?? b.t,
+      open:   b.open,
+      high:   b.high,
+      low:    b.low,
+      close:  b.close,
+      volume: b.volume ?? 0,
+      source: 'FMP',
+    })).sort((a, b) => (a.time > b.time ? 1 : -1));
+  };
+
+  /**
+   * Get IB account summary.
+   * Returns: { netLiq, cashBalance, buyingPower, unrealizedPnl, currency, source }
+   */
+  const account = async () => {
+    if (!isCowork()) return { source: 'unavailable' };
+
+    try {
+      const raw = await mcp(IB, 'get_account_summary');
+      const d = Array.isArray(raw) ? raw[0] : raw;
+      return {
+        netLiq:       parseFloat(d?.NetLiquidation ?? d?.netLiq ?? 0),
+        cashBalance:  parseFloat(d?.TotalCashValue ?? d?.cash ?? 0),
+        buyingPower:  parseFloat(d?.BuyingPower ?? d?.buyingPower ?? 0),
+        unrealizedPnl:parseFloat(d?.UnrealizedPnL ?? d?.unrealizedPnl ?? 0),
+        currency:     d?.currency ?? 'USD',
+        source:       'IB',
+      };
+    } catch (e) {
+      console.warn('Account summary failed:', e.message);
+      return { source: 'error', error: e.message };
+    }
+  };
+
+  /**
+   * Get current IB positions.
+   * Returns: [{ symbol, conid, quantity, avgCost, marketValue, unrealizedPnl, currency }]
+   */
+  const positions = async () => {
+    if (!isCowork()) return [];
+
+    try {
+      const raw = await mcp(IB, 'get_account_positions');
+      const arr = Array.isArray(raw) ? raw : raw?.positions ?? [];
+      return arr.map(p => ({
+        symbol:       p.symbol ?? p.contractDesc ?? p.Symbol,
+        conid:        p.conid ?? p.CONID,
+        quantity:     parseFloat(p.position ?? p.size ?? p.qty ?? 0),
+        avgCost:      parseFloat(p.avgCost ?? p.avgPrice ?? 0),
+        marketValue:  parseFloat(p.mktValue ?? p.marketValue ?? 0),
+        unrealizedPnl:parseFloat(p.unrealizedPnl ?? p.unrealizedPNL ?? 0),
+        currency:     p.currency ?? 'USD',
+        assetClass:   p.assetClass ?? p.secType ?? 'STK',
+      }));
+    } catch (e) {
+      console.warn('Positions failed:', e.message);
+      return [];
+    }
+  };
+
+  /**
+   * Get recent IB trades.
+   * Returns: [{ conid, symbol, side, quantity, price, commission, time }]
+   */
+  const trades = async () => {
+    if (!isCowork()) return [];
+
+    try {
+      const raw = await mcp(IB, 'get_account_trades');
+      const arr = Array.isArray(raw) ? raw : raw?.trades ?? [];
+      return arr.map(t => ({
+        symbol:     t.symbol ?? t.contractDesc,
+        side:       t.side ?? t.buySell,
+        quantity:   parseFloat(t.size ?? t.quantity ?? 0),
+        price:      parseFloat(t.price ?? t.execPrice ?? 0),
+        commission: parseFloat(t.commission ?? 0),
+        time:       t.trade_time ?? t.time,
+        pnl:        parseFloat(t.realizedPnl ?? t.pnl ?? 0),
+      }));
+    } catch (e) {
+      console.warn('Trades failed:', e.message);
+      return [];
+    }
+  };
+
+  /**
+   * Search IB contracts by symbol string.
+   * Returns: [{ conid, symbol, description, secType, exchange, currency }]
+   */
+  const searchContracts = async (query) => {
+    if (!isCowork()) return [];
+    try {
+      const raw = await mcp(IB, 'search_contracts', { query });
+      return Array.isArray(raw) ? raw : raw?.contracts ?? [];
+    } catch (e) { return []; }
+  };
+
+  /**
+   * Get options IV data for a symbol (IB only — no FMP fallback for this)
+   */
+  const optionsIV = async (symbol) => {
+    if (!isCowork()) return null;
+    const sym = normSymbol(symbol);
+    try {
+      const [iv, ivPct] = await Promise.allSettled([
+        mcp(IB, 'implied-vol-underlying', { symbol: sym }),
+        mcp(IB, 'implied-volatility-percentile', { symbol: sym }),
+      ]);
+      return {
+        iv:       iv.status === 'fulfilled' ? iv.value : null,
+        ivRank:   ivPct.status === 'fulfilled' ? ivPct.value : null,
+        source:   'IB',
+      };
+    } catch (e) { return null; }
+  };
+
+  /**
+   * Get FMP news for a symbol.
+   */
+  const news = async (symbol, limit = 10) => {
+    const sym = normSymbol(symbol);
+    if (isCowork()) {
+      try {
+        const raw = await mcp(FMP_MCP, 'news', { ticker: sym, limit });
+        return Array.isArray(raw) ? raw : raw?.news ?? [];
+      } catch {}
+    }
+    const data = await fmp('/v3/stock_news', { tickers: sym, limit });
+    return Array.isArray(data) ? data : [];
+  };
+
+  /**
+   * Get multiple quotes at once (batch).
+   */
+  const batchQuotes = async (symbols) => {
+    if (isCowork()) {
+      // Sequential for IB (no batch endpoint)
+      const results = await Promise.allSettled(symbols.map(s => quote(s)));
+      return results.map((r, i) => r.status === 'fulfilled' ? r.value : { symbol: symbols[i], error: true });
+    }
+    // FMP batch endpoint
+    const sym = symbols.map(normSymbol).join(',');
+    const data = await fmp('/v3/quote/' + sym);
+    return Array.isArray(data) ? data.map(d => ({
+      symbol:    d.symbol,
+      last:      d.price,
+      change:    d.change,
+      changePct: d.changesPercentage,
+      volume:    d.volume,
+      source:    'FMP',
+    })) : [];
+  };
+
+  /* ── Source status ── */
+  const getSourceStatus = async () => {
+    if (isCowork()) {
+      try {
+        await mcp(IB, 'get_account_summary');
+        return 'ib';
+      } catch {}
+      return 'fmp'; // Cowork but IB not responding
+    }
+    return getFmpKey() ? 'fmp' : 'off';
+  };
+
+  /* ── Settings helpers ── */
+  const saveSetting = (key, val) => localStorage.setItem(`rcm_${key}`, JSON.stringify(val));
+  const loadSetting = (key, def) => {
+    const v = localStorage.getItem(`rcm_${key}`);
+    return v !== null ? JSON.parse(v) : def;
+  };
+
+  /* ── Number formatters ── */
+  const fmt = {
+    price:  (v, d=4) => v == null ? '—' : Number(v).toFixed(d),
+    pct:    (v)      => v == null ? '—' : (v > 0 ? '+' : '') + Number(v).toFixed(2) + '%',
+    money:  (v, c='$') => v == null ? '—' : c + Math.abs(Number(v)).toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}),
+    num:    (v, d=2) => v == null ? '—' : Number(v).toFixed(d),
+    compact:(v)      => {
+      if (v == null) return '—';
+      const n = Math.abs(Number(v));
+      if (n >= 1e9) return (v/1e9).toFixed(1) + 'B';
+      if (n >= 1e6) return (v/1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return (v/1e3).toFixed(1) + 'K';
+      return Number(v).toFixed(0);
+    },
+    ts: (v) => v ? new Date(v).toLocaleTimeString('en-SG', {timeZone:'Asia/Singapore'}) : '—',
+    dt: (v) => v ? new Date(v).toLocaleDateString('en-SG', {timeZone:'Asia/Singapore'}) : '—',
+  };
+
+  /* ── Colour helper ── */
+  const dirColor = (val) => {
+    if (val == null) return '';
+    return Number(val) > 0 ? 'up' : Number(val) < 0 ? 'dn' : '';
+  };
+
+  /* ── Public exports ── */
+  return {
+    isCowork,
+    quote,
+    history,
+    account,
+    positions,
+    trades,
+    searchContracts,
+    optionsIV,
+    news,
+    batchQuotes,
+    getSourceStatus,
+    getFmpKey,
+    setFmpKey,
+    FMP_KEY_STORAGE,
+    saveSetting,
+    loadSetting,
+    fmt,
+    dirColor,
+  };
+
+})();
+
+/* ── RCM Header builder ── */
+RCM.buildHeader = (opts = {}) => {
+  const { title = '', subtitle = '', activePage = '' } = opts;
+  const navLinks = [
+    { href: '../index.html',              label: 'Dashboard',     key: 'dashboard' },
+    { href: '../terminal/index.html',     label: 'Terminal',      key: 'terminal' },
+    { href: '../trade-setup/index.html',  label: 'Trade Setup',   key: 'tradesetup' },
+    { href: '../options/index.html',      label: 'Options IV',    key: 'options' },
+    { href: '../journal/index.html',      label: 'Journal',       key: 'journal' },
+    { href: '../quant-systems/index.html',label: 'Quant Systems', key: 'quantsystems' },
+  ];
+
+  return `
+  <header class="rcm-header">
+    <div class="rcm-mark">
+      <svg width="26" height="26" viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0"    y="0"    width="6.5" height="6.5" fill="#fff"/>
+        <rect x="7.75" y="0"    width="6.5" height="6.5" fill="#fff"/>
+        <rect x="15.5" y="0"    width="6.5" height="6.5" fill="#fff"/>
+        <rect x="0"    y="7.75" width="6.5" height="6.5" fill="#fff"/>
+        <rect x="0"    y="15.5" width="6.5" height="6.5" fill="#fff"/>
+        <polygon points="10.5,22 22,22 16.25,13" fill="#C0392B"/>
+      </svg>
+    </div>
+    <div class="rcm-wordmark">
+      <span class="line1">Rapid Capital</span>
+      <span class="line2">Management</span>
+    </div>
+    <div class="rcm-header-divider"></div>
+    <div class="rcm-header-title">${title}</div>
+    <div class="rcm-header-right">
+      <nav class="rcm-header-nav">
+        ${navLinks.map(l => `<a href="${l.href}" class="rcm-nav-link${activePage === l.key ? ' active' : ''}">${l.label}</a>`).join('')}
+      </nav>
+      <div id="rcm-source-badge" class="source-badge off">Init</div>
+    </div>
+  </header>`;
+};
+
+RCM.buildFooter = (subtitle = 'Internal · Confidential') => `
+  <footer class="rcm-footer">
+    <span class="left">${subtitle}</span>
+    <span class="right">Rapid Capital Management</span>
+  </footer>`;
+
+/* ── Source badge updater ── */
+RCM.updateSourceBadge = async () => {
+  const el = document.getElementById('rcm-source-badge');
+  if (!el) return;
+  el.textContent = 'Checking…';
+  try {
+    const src = await RCM.getSourceStatus();
+    el.className = `source-badge ${src}`;
+    el.textContent = src === 'ib' ? 'IB Live' : src === 'fmp' ? 'FMP' : 'Offline';
+  } catch {
+    el.className = 'source-badge off';
+    el.textContent = 'Offline';
+  }
+};
+
+/* ── FMP key prompt (shown once if key missing) ── */
+RCM.promptFmpKey = () => {
+  if (RCM.getFmpKey() || RCM.isCowork()) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#C9A14A;color:#0B1D3A;padding:10px 20px;display:flex;align-items:center;gap:12px;z-index:9999;font-size:12px;font-weight:700;';
+  div.innerHTML = `
+    <span>⚠ FMP API key required for market data</span>
+    <input id="fmp-key-input" type="text" placeholder="Enter FMP API key…"
+      style="flex:1;max-width:300px;padding:5px 10px;border:none;border-radius:3px;font-size:12px;">
+    <button onclick="RCM.setFmpKey(document.getElementById('fmp-key-input').value);this.closest('div').remove();location.reload();"
+      style="padding:5px 14px;background:#0B1D3A;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:700;">Save</button>`;
+  document.body.prepend(div);
+};

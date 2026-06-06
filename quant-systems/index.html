@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCM Quant Systems</title>
+<link rel="stylesheet" href="../shared/rcm-style.css">
+<style>
+  .stack-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .stack-card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .stack-card-header {
+    background: var(--navy);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .stack-card-header .icon { font-size: 18px; }
+  .stack-card-header .title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .stack-card-header .sub {
+    font-size: 9px;
+    color: rgba(255,255,255,.4);
+    margin-left: auto;
+    letter-spacing: 1px;
+  }
+
+  .stack-card-body { padding: 14px 16px; }
+
+  .stack-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--zebra);
+  }
+  .stack-item:last-child { border-bottom: none; }
+
+  .stack-item .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+  .dot-green  { background: var(--trade); }
+  .dot-gold   { background: var(--gold); }
+  .dot-navy   { background: var(--navyMid); }
+  .dot-red    { background: var(--risk); }
+  .dot-muted  { background: var(--muted); }
+
+  .stack-item .info { flex: 1; }
+  .stack-item .name { font-size: 12px; font-weight: 700; color: var(--navy); }
+  .stack-item .desc { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .stack-item .tag  {
+    font-size: 8px; font-weight: 700; letter-spacing: 1.5px;
+    padding: 2px 6px; border-radius: 3px;
+    background: var(--zebra); color: var(--muted);
+    white-space: nowrap; margin-top: 4px; display: inline-block;
+  }
+  .tag.live    { background: rgba(26,110,46,.1);  color: var(--trade); }
+  .tag.active  { background: rgba(201,161,74,.1); color: var(--gold); }
+  .tag.planned { background: rgba(11,29,58,.08);  color: var(--navyMid); }
+
+  .mcp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    border: 1px solid;
+    margin-top: 4px;
+  }
+  .mcp-badge.connected { color: #4CAF50; border-color: #4CAF50; background: rgba(76,175,80,.08); }
+  .mcp-badge.rest      { color: var(--gold); border-color: var(--gold); background: rgba(201,161,74,.08); }
+  .mcp-badge.planned   { color: var(--muted); border-color: var(--muted); background: transparent; }
+  .mcp-badge::before   { content: '●'; font-size: 6px; }
+
+  .mcp-id {
+    font-size: 9px;
+    font-family: monospace;
+    background: var(--zebra);
+    padding: 4px 8px;
+    border-radius: 3px;
+    color: var(--muted);
+    margin-top: 6px;
+    display: block;
+    word-break: break-all;
+  }
+
+  .legend { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .legend-dot  { width: 8px; height: 8px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div id="rcm-header-mount"></div>
+
+<div class="rcm-body">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <div>
+      <div class="section-label" style="margin-bottom:4px;">Quant Systems</div>
+      <div style="font-size:12px;color:var(--muted);">RCM Terminal Tech Stack · Build v1.0 · Updated June 2026</div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);">
+      <span id="rcm-source-badge" class="source-badge off">Offline</span>
+    </div>
+  </div>
+
+  <div class="legend" style="margin-top:16px;">
+    <div class="legend-item"><div class="legend-dot dot-green"></div> MCP Connected</div>
+    <div class="legend-item"><div class="legend-dot dot-gold"></div> REST / API Active</div>
+    <div class="legend-item"><div class="legend-dot dot-navy"></div> Dev / Hosting</div>
+    <div class="legend-item"><div class="legend-dot dot-red"></div> Execution Bridge</div>
+    <div class="legend-item"><div class="legend-dot dot-muted"></div> Planned / Optional</div>
+  </div>
+
+  <!-- ── Row 1 ── -->
+  <div class="stack-grid">
+
+    <!-- IB MCP -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">🏦</span>
+        <span class="title">Interactive Brokers</span>
+        <span class="sub">Primary Broker</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-green"></div>
+          <div class="info">
+            <div class="name">IB MCP Server</div>
+            <div class="desc">Live account data, positions, orders, trades, price history, price snapshot, contract search, order staging (create_order_instruction).</div>
+            <span class="mcp-badge connected">MCP Connected</span>
+            <code class="mcp-id">mcp__c5c4b258-c195-40b0-80eb-29affac08285</code>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-green"></div>
+          <div class="info">
+            <div class="name">Available Tools (11)</div>
+            <div class="desc">get_account_summary · get_account_balances · get_account_positions · get_account_orders · get_account_trades · get_price_history · get_price_snapshot · search_contracts · create_order_instruction · delete_order_instruction · get_order_instructions</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-red"></div>
+          <div class="info">
+            <div class="name">Execution Note</div>
+            <div class="desc">create_order_instruction stages to IBKR only — deep-links to TWS/Client Portal for manual confirm. Claude cannot execute trades autonomously.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FMP MCP -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">📊</span>
+        <span class="title">Financial Modeling Prep</span>
+        <span class="sub">Market Data Layer</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-green"></div>
+          <div class="info">
+            <div class="name">FMP MCP Server</div>
+            <div class="desc">Fundamentals, COT data, news, technical indicators, forex quotes, earnings transcripts, SEC filings, economic calendar.</div>
+            <span class="mcp-badge connected">MCP Connected</span>
+            <code class="mcp-id">mcp__a97bb01e-3373-4b7d-b3ec-66a6a4524ffe</code>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-gold"></div>
+          <div class="info">
+            <div class="name">FMP REST API</div>
+            <div class="desc">Universal fallback when not in Cowork. API key stored in localStorage (key: rcm_fmp_api_key). Prompted on first load via banner.</div>
+            <span class="mcp-badge rest">REST Fallback</span>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-gold"></div>
+          <div class="info">
+            <div class="name">Two-Layer Architecture</div>
+            <div class="desc">if (window.cowork) → IB MCP or FMP MCP path; else → FMP REST API. Same codebase, both modes.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hosting -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">☁️</span>
+        <span class="title">Hosting & Deployment</span>
+        <span class="sub">Infrastructure</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-navy"></div>
+          <div class="info">
+            <div class="name">GitHub</div>
+            <div class="desc">Source repo at HFOS/03_TRADE_OPERATIONS/GITHUB/rcm-terminal. Push via GitHub Desktop. No Copilot Pro needed.</div>
+            <span class="tag active">Active Repo</span>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-muted"></div>
+          <div class="info">
+            <div class="name">Cloudflare Pages</div>
+            <div class="desc">Free hosting, auto-deploys from GitHub push. Connect at cloudflare.com/pages → Import GitHub repo. Zero config needed.</div>
+            <span class="tag planned">Setup Pending</span>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-muted"></div>
+          <div class="info">
+            <div class="name">Cloudflare Access</div>
+            <div class="desc">Auth gate: email OTP only — allow ahanx8@gmail.com. Free tier. This replaces GitHub Pages Pro requirement.</div>
+            <span class="tag planned">Setup Pending</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dev Platforms -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">🛠️</span>
+        <span class="title">Development Platforms</span>
+        <span class="sub">Build Environment</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-green"></div>
+          <div class="info">
+            <div class="name">Claude Cowork (Primary)</div>
+            <div class="desc">Main dev environment. File Read/Write/Edit tools + Bash sandbox + MCP connectors. All platform files built here and written directly to HFOS repo folder.</div>
+            <span class="tag live">Primary IDE</span>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-gold"></div>
+          <div class="info">
+            <div class="name">Replit</div>
+            <div class="desc">Alternative for isolated testing, prototyping modules, or sharing demo environments without HFOS access. Good for testing FMP REST API paths in isolation.</div>
+            <span class="tag active">Secondary</span>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-navy"></div>
+          <div class="info">
+            <div class="name">GitHub Desktop</div>
+            <div class="desc">Manual push from HFOS folder to GitHub. Claude writes files → user opens GitHub Desktop → commit & push → Cloudflare auto-deploys.</div>
+            <span class="tag active">Deploy Path</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charting -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">📈</span>
+        <span class="title">Charting Library</span>
+        <span class="sub">Visualization</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-green"></div>
+          <div class="info">
+            <div class="name">TradingView Lightweight Charts v4.2.0</div>
+            <div class="desc">Free open-source. Loaded from CDN. Supports candlestick, bar, line, histogram, synchronized time scales, crosshair events, real-time updates.</div>
+            <span class="tag live">Active</span>
+            <code class="mcp-id">https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js</code>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-navy"></div>
+          <div class="info">
+            <div class="name">Chart Types Built</div>
+            <div class="desc">Candlestick · Bar · Line (area) · Volume histogram. Two synchronized LightweightCharts instances with subscribeVisibleLogicalRangeChange.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execution -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">⚡</span>
+        <span class="title">Execution Layer</span>
+        <span class="sub">Order Routing</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-green"></div>
+          <div class="info">
+            <div class="name">IB Order Staging</div>
+            <div class="desc">create_order_instruction generates a deep-link to IBKR TWS/Client Portal. User reviews and clicks PLACE manually. Covers: Futures, Equities, Equity Options, Futures Options.</div>
+            <span class="tag live">Active (Cowork)</span>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-red"></div>
+          <div class="info">
+            <div class="name">Axi MT4 File Bridge</div>
+            <div class="desc">For FX Spot & CFDs. Claude writes JSON to HFOS/EXECUTION/pending_trade.json → MQL4 EA reads on 1s timer → confirm popup → user clicks PLACE.</div>
+            <span class="tag planned">EA Build Pending</span>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-red"></div>
+          <div class="info">
+            <div class="name">Axi Platform</div>
+            <div class="desc">MT4 platform for FX spot and CFDs. Reference: Axi product schedule PDF + commodities page (see HFOS memory for links). Verify contract specs before position sizer update.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Frontend Stack -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">🖥️</span>
+        <span class="title">Frontend Architecture</span>
+        <span class="sub">Code Stack</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-navy"></div>
+          <div class="info">
+            <div class="name">Vanilla HTML/CSS/JS</div>
+            <div class="desc">No framework. Intentional — maximises portability across devices, no build step, deploys as static files. Works offline with cached data.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-navy"></div>
+          <div class="info">
+            <div class="name">Shared Module: rcm-utils.js</div>
+            <div class="desc">Central RCM object. Two-layer data (IB MCP → FMP REST). Formatters, header/footer builders, source badge, FMP key prompt. All pages import this.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-navy"></div>
+          <div class="info">
+            <div class="name">Shared Style: rcm-style.css</div>
+            <div class="desc">Brand token system (navy/gold). All RCM components: header, tabs, panels, KPI tiles, tables, buttons, forms, alerts, spinner, footer, print CSS.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-gold"></div>
+          <div class="info">
+            <div class="name">State Persistence</div>
+            <div class="desc">localStorage with rcm_ prefix. Saves: FMP API key, symbol selection, TF/chart type preferences, setup state. No server-side sessions needed.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RCM Brand System -->
+    <div class="stack-card">
+      <div class="stack-card-header">
+        <span class="icon">🎨</span>
+        <span class="title">RCM Brand System</span>
+        <span class="sub">Style Spec (Mandatory)</span>
+      </div>
+      <div class="stack-card-body">
+        <div class="stack-item">
+          <div class="dot dot-gold"></div>
+          <div class="info">
+            <div class="name">Colour Tokens</div>
+            <div class="desc">
+              Navy: <code style="background:var(--zebra);padding:1px 5px;border-radius:3px;">#0B1D3A</code> ·
+              Gold: <code style="background:var(--zebra);padding:1px 5px;border-radius:3px;">#C9A14A</code> ·
+              Risk: <code style="background:var(--zebra);padding:1px 5px;border-radius:3px;">#A82020</code> ·
+              Trade: <code style="background:var(--zebra);padding:1px 5px;border-radius:3px;">#1A6E2E</code> ·
+              BG: <code style="background:var(--zebra);padding:1px 5px;border-radius:3px;">#F4F6FA</code>
+            </div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-gold"></div>
+          <div class="info">
+            <div class="name">SVG Mark</div>
+            <div class="desc">3-column grid of white rects + red triangle (#C0392B). Montserrat wordmark. Required on every artifact / page header.</div>
+          </div>
+        </div>
+        <div class="stack-item">
+          <div class="dot dot-gold"></div>
+          <div class="info">
+            <div class="name">Layout Standard</div>
+            <div class="desc">Navy header (56px sticky) + gold border · #F4F6FA body · Navy footer. Gold tabs/labels on dark panels. Print CSS block required on all reports.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── File Structure ── -->
+  <div class="section-label" style="margin-bottom:16px;">Repo File Structure</div>
+  <div class="rcm-card" style="padding:20px;">
+    <pre style="font-size:11px;font-family:monospace;color:var(--body);line-height:1.7;margin:0;">
+rcm-terminal/
+├── index.html                  ✅ Dashboard — tool cards, account KPIs, market watch, positions
+├── shared/
+│   ├── rcm-style.css           ✅ Brand stylesheet — all tokens, components, print CSS
+│   └── rcm-utils.js            ✅ Data utility — IB MCP + FMP fallback, formatters, header/footer
+├── terminal/
+│   └── index.html              ✅ Charting terminal — LightCharts v4.2, sync volume, IV overlay, watchlist
+├── trade-setup/
+│   └── index.html              ✅ Trade Setup Generator — 6 instrument schemas, auto-calcs, MT4 bridge
+├── quant-systems/
+│   └── index.html              ✅ Tech stack reference card (this page)
+├── options/
+│   └── index.html              🔲 IV Scanner — IV rank, HV/IV spread, P/C ratio (IB required)
+├── journal/
+│   └── index.html              🔲 Trade Journal — IB trade history, PnL analytics, win rate, drawdown
+├── execution/
+│   └── pending_trade.json      🔲 MT4 File Bridge output (written by Trade Setup)
+└── docs/
+    └── RCM_TERMINAL_ROADMAP.md 🔲 Development roadmap + task tracker</pre>
+  </div>
+
+  <!-- ── API Key Reference ── -->
+  <div class="section-label" style="margin-top:28px;margin-bottom:16px;">API Key Management</div>
+  <div class="rcm-card">
+    <table class="rcm-table">
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Storage Location</th>
+          <th>Key Name</th>
+          <th>How Set</th>
+          <th>Mode</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>FMP REST API</strong></td>
+          <td>Browser localStorage</td>
+          <td><code>rcm_fmp_api_key</code></td>
+          <td>Prompted via top banner on first load</td>
+          <td>Universal</td>
+        </tr>
+        <tr>
+          <td><strong>IB MCP</strong></td>
+          <td>Cowork MCP config</td>
+          <td>Auto via session</td>
+          <td>Cowork MCP connector (pre-configured)</td>
+          <td>Cowork only</td>
+        </tr>
+        <tr>
+          <td><strong>FMP MCP</strong></td>
+          <td>Cowork MCP config</td>
+          <td>Auto via session</td>
+          <td>Cowork MCP connector (pre-configured)</td>
+          <td>Cowork only</td>
+        </tr>
+        <tr>
+          <td><strong>Cloudflare API</strong></td>
+          <td>Cloudflare Dashboard</td>
+          <td>—</td>
+          <td>Set in Cloudflare Pages env vars if Worker proxy needed</td>
+          <td>Deployed</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<div id="rcm-footer-mount"></div>
+
+<script src="../shared/rcm-utils.js"></script>
+<script>
+document.getElementById('rcm-header-mount').innerHTML = RCM.buildHeader({
+  title: 'Quant Systems',
+  activePage: 'quantsystems',
+});
+document.getElementById('rcm-footer-mount').innerHTML = RCM.buildFooter('Tech Stack & Infrastructure Reference');
+RCM.updateSourceBadge();
+</script>
+</body>
+</html>

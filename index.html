@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCM Trading Platform</title>
+<link rel="stylesheet" href="shared/rcm-style.css">
+<style>
+  /* ── Dashboard-specific ── */
+  .tool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .tool-card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color .2s, box-shadow .2s, transform .15s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .tool-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--gold);
+    transform: scaleX(0);
+    transition: transform .2s;
+    transform-origin: left;
+  }
+  .tool-card:hover { border-color: var(--gold); box-shadow: 0 4px 16px rgba(11,29,58,.12); transform: translateY(-1px); }
+  .tool-card:hover::before { transform: scaleX(1); }
+  .tool-card-icon {
+    width: 36px; height: 36px;
+    background: var(--navyLight);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .tool-card-title {
+    font-size: 14px; font-weight: 700; color: var(--navy);
+  }
+  .tool-card-desc {
+    font-size: 11px; color: var(--muted); line-height: 1.5;
+  }
+  .tool-card-badge {
+    display: inline-block;
+    font-size: 8px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--navyLight);
+    color: var(--gold);
+    margin-top: auto;
+    align-self: flex-start;
+  }
+
+  .mkt-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .mkt-tile {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .mkt-tile:hover { border-color: var(--gold); }
+  .mkt-sym  { font-size: 11px; font-weight: 700; color: var(--navy); margin-bottom: 3px; }
+  .mkt-price{ font-size: 17px; font-weight: 700; color: var(--body); font-variant-numeric: tabular-nums; }
+  .mkt-chg  { font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .mkt-chg.up { color: var(--up); }
+  .mkt-chg.dn { color: var(--down); }
+
+  .acct-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 900px) { .acct-grid { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 500px) { .acct-grid { grid-template-columns: 1fr; } }
+
+  .pos-table-wrap { max-height: 280px; overflow-y: auto; }
+
+  .acct-unavail {
+    text-align: center;
+    padding: 20px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .section-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 800px) { .section-row { grid-template-columns: 1fr; } }
+
+  .last-update {
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div id="rcm-header-mount"></div>
+
+<div class="rcm-body">
+
+  <!-- ── TOOLS NAVIGATION ── -->
+  <div style="margin-bottom:28px;">
+    <div class="section-label" style="margin-bottom:16px;">Trading Tools</div>
+    <div class="tool-grid">
+
+      <a href="terminal/index.html" class="tool-card">
+        <div class="tool-card-icon">📈</div>
+        <div class="tool-card-title">RCM Terminal</div>
+        <div class="tool-card-desc">Multi-timeframe charting with candlestick, volume, and IV overlays. Live IB data.</div>
+        <div class="tool-card-badge">Live Charts</div>
+      </a>
+
+      <a href="trade-setup/index.html" class="tool-card">
+        <div class="tool-card-icon">⚙️</div>
+        <div class="tool-card-title">Trade Setup</div>
+        <div class="tool-card-desc">Instrument-aware parameter builder. FX, CFDs, Futures, Options, Equities. Auto risk calc.</div>
+        <div class="tool-card-badge">6 Instruments</div>
+      </a>
+
+      <a href="options/index.html" class="tool-card">
+        <div class="tool-card-icon">🎯</div>
+        <div class="tool-card-title">Options IV Scanner</div>
+        <div class="tool-card-desc">IV rank, IV percentile, HV/IV spread, put/call ratio across your universe.</div>
+        <div class="tool-card-badge">IB Required</div>
+      </a>
+
+      <a href="journal/index.html" class="tool-card">
+        <div class="tool-card-icon">📓</div>
+        <div class="tool-card-title">Trade Journal</div>
+        <div class="tool-card-desc">Review IB trade history. PnL by asset class, win rate, drawdown analysis.</div>
+        <div class="tool-card-badge">Performance</div>
+      </a>
+
+      <a href="quant-systems/index.html" class="tool-card">
+        <div class="tool-card-icon">⚙️</div>
+        <div class="tool-card-title">Quant Systems</div>
+        <div class="tool-card-desc">Tech stack reference — IB, FMP, Cloudflare, MT4 bridge, dev roadmap and build tracker.</div>
+        <div class="tool-card-badge">Dev Reference</div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ── ACCOUNT SUMMARY ── -->
+  <div style="margin-bottom:24px;">
+    <div class="section-label">Account Summary</div>
+    <div class="last-update" id="acct-ts">Loading…</div>
+    <div class="acct-grid" id="acct-grid">
+      <div class="kpi-tile"><div class="kpi-label">Net Liquidation</div><div class="kpi-value" id="kpi-netliq">—</div><div class="kpi-sub" id="kpi-ccy">IB Account</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Cash Balance</div><div class="kpi-value" id="kpi-cash">—</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Buying Power</div><div class="kpi-value" id="kpi-bp">—</div></div>
+      <div class="kpi-tile"><div class="kpi-label">Unrealised P&L</div><div class="kpi-value" id="kpi-upnl">—</div></div>
+    </div>
+  </div>
+
+  <!-- ── MARKET OVERVIEW + POSITIONS ── -->
+  <div class="section-row">
+
+    <!-- Market Overview -->
+    <div>
+      <div class="section-label">Market Overview</div>
+      <div class="last-update" id="mkt-ts">Loading…</div>
+      <div class="mkt-grid" id="mkt-grid">
+        <!-- injected by JS -->
+        <div class="rcm-loading"><div class="rcm-spinner"></div> Fetching quotes…</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadMarkets()" style="margin-top:8px;">↻ Refresh</button>
+    </div>
+
+    <!-- Positions -->
+    <div>
+      <div class="section-label">Open Positions</div>
+      <div class="pos-table-wrap">
+        <div id="pos-container">
+          <div class="acct-unavail">Loading positions…</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div id="rcm-footer-mount"></div>
+
+<script src="shared/rcm-utils.js"></script>
+<script>
+// ── Inject header/footer ──
+document.getElementById('rcm-header-mount').innerHTML = RCM.buildHeader({
+  title: 'Trading Platform',
+  activePage: 'dashboard',
+});
+document.getElementById('rcm-footer-mount').innerHTML = RCM.buildFooter();
+RCM.updateSourceBadge();
+RCM.promptFmpKey();
+
+// ── Market watch symbols ──
+const WATCH = [
+  { sym: 'EURUSD', label: 'EUR/USD', digits: 5 },
+  { sym: 'GBPUSD', label: 'GBP/USD', digits: 5 },
+  { sym: 'USDJPY', label: 'USD/JPY', digits: 3 },
+  { sym: 'AUDUSD', label: 'AUD/USD', digits: 5 },
+  { sym: 'USDCAD', label: 'USD/CAD', digits: 5 },
+  { sym: 'SPY',    label: 'SPY',     digits: 2 },
+  { sym: 'QQQ',    label: 'QQQ',     digits: 2 },
+  { sym: 'GLD',    label: 'Gold',    digits: 2 },
+  { sym: 'USO',    label: 'Oil',     digits: 2 },
+  { sym: 'TLT',    label: 'TLT',     digits: 2 },
+];
+
+async function loadMarkets() {
+  const grid = document.getElementById('mkt-grid');
+  grid.innerHTML = '<div class="rcm-loading"><div class="rcm-spinner"></div> Fetching quotes…</div>';
+
+  try {
+    const quotes = await RCM.batchQuotes(WATCH.map(w => w.sym));
+    grid.innerHTML = quotes.map((q, i) => {
+      const w = WATCH[i];
+      if (q.error || !q.last) return `
+        <div class="mkt-tile" title="${w.sym}">
+          <div class="mkt-sym">${w.label}</div>
+          <div class="mkt-price" style="color:var(--muted);font-size:14px;">N/A</div>
+        </div>`;
+      const chg = q.changePct != null ? q.changePct : (q.change && q.last ? (q.change / (q.last - q.change)) * 100 : null);
+      const cls = chg > 0 ? 'up' : chg < 0 ? 'dn' : '';
+      return `
+        <div class="mkt-tile" onclick="openTerminal('${w.sym}')" title="Open ${w.label} in terminal">
+          <div class="mkt-sym">${w.label}</div>
+          <div class="mkt-price">${RCM.fmt.price(q.last, w.digits)}</div>
+          <div class="mkt-chg ${cls}">${chg != null ? RCM.fmt.pct(chg) : '—'}</div>
+        </div>`;
+    }).join('');
+    document.getElementById('mkt-ts').textContent = 'Updated ' + RCM.fmt.ts(Date.now()) + ' SGT';
+  } catch (e) {
+    grid.innerHTML = `<div class="rcm-alert warn" style="grid-column:1/-1;">⚠ Market data unavailable: ${e.message}</div>`;
+  }
+}
+
+function openTerminal(sym) {
+  localStorage.setItem('rcm_terminal_sym', sym);
+  window.location.href = 'terminal/index.html';
+}
+
+async function loadAccount() {
+  try {
+    const acct = await RCM.account();
+    if (acct.source === 'unavailable' || acct.source === 'error') {
+      document.getElementById('acct-ts').textContent = 'IB not connected — open in Cowork for live data';
+      return;
+    }
+    const upnlEl = document.getElementById('kpi-upnl');
+    const upnl = acct.unrealizedPnl;
+    upnlEl.textContent = RCM.fmt.money(upnl);
+    upnlEl.style.color = upnl > 0 ? 'var(--up)' : upnl < 0 ? 'var(--down)' : 'var(--navy)';
+
+    document.getElementById('kpi-netliq').textContent = RCM.fmt.money(acct.netLiq);
+    document.getElementById('kpi-cash').textContent   = RCM.fmt.money(acct.cashBalance);
+    document.getElementById('kpi-bp').textContent     = RCM.fmt.money(acct.buyingPower);
+    document.getElementById('kpi-ccy').textContent    = acct.currency + ' Account';
+    document.getElementById('acct-ts').textContent    = 'Updated ' + RCM.fmt.ts(Date.now()) + ' SGT';
+  } catch (e) {
+    document.getElementById('acct-ts').textContent = 'Account data unavailable';
+  }
+}
+
+async function loadPositions() {
+  const el = document.getElementById('pos-container');
+  try {
+    const pos = await RCM.positions();
+    if (!pos.length) {
+      el.innerHTML = '<div class="acct-unavail">No open positions · <a href="terminal/index.html" style="color:var(--gold);">Open Terminal</a></div>';
+      return;
+    }
+    el.innerHTML = `
+      <table class="rcm-table">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Type</th>
+            <th class="num">Qty</th>
+            <th class="num">Avg Cost</th>
+            <th class="num">Mkt Value</th>
+            <th class="num">UnPnL</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pos.map(p => {
+            const cls = p.unrealizedPnl > 0 ? 'up' : p.unrealizedPnl < 0 ? 'dn' : '';
+            return `<tr>
+              <td><strong>${p.symbol}</strong></td>
+              <td style="color:var(--muted);font-size:11px;">${p.assetClass}</td>
+              <td class="num">${p.quantity > 0 ? '+' : ''}${p.quantity}</td>
+              <td class="num">${RCM.fmt.price(p.avgCost, 4)}</td>
+              <td class="num">${RCM.fmt.money(p.marketValue)}</td>
+              <td class="num ${cls}">${RCM.fmt.money(p.unrealizedPnl)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch {
+    el.innerHTML = '<div class="acct-unavail">Positions unavailable · Open in Cowork for IB data</div>';
+  }
+}
+
+// ── Boot ──
+loadMarkets();
+loadAccount();
+loadPositions();
+</script>
+</body>
+</html>

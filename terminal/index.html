@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCM Terminal</title>
+<link rel="stylesheet" href="../shared/rcm-style.css">
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  body { overflow: hidden; height: 100vh; }
+
+  /* ── Control bar ── */
+  .ctrl-bar {
+    background: var(--navyLight);
+    padding: 6px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    flex-shrink: 0;
+  }
+  .sym-input {
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 5px 12px;
+    width: 110px;
+    outline: none;
+    text-transform: uppercase;
+  }
+  .sym-input::placeholder { color: rgba(255,255,255,.4); }
+  .sym-input:focus { border-color: var(--gold); }
+
+  .tf-group { display: flex; gap: 2px; }
+  .tf-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 3px;
+    color: rgba(255,255,255,.6);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .tf-btn:hover { color: #fff; border-color: rgba(255,255,255,.4); }
+  .tf-btn.active { background: var(--gold); color: var(--navy); border-color: var(--gold); }
+
+  .chart-type-group { display: flex; gap: 2px; }
+  .ct-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 3px;
+    color: rgba(255,255,255,.5);
+    font-size: 16px;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .ct-btn:hover { color: #fff; }
+  .ct-btn.active { background: var(--gold); color: var(--navy); border-color: var(--gold); }
+
+  /* ── Layout ── */
+  .terminal-layout {
+    display: flex;
+    height: calc(100vh - 56px - 42px); /* header + ctrl bar */
+    overflow: hidden;
+  }
+  .chart-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .chart-container {
+    flex: 1;
+    position: relative;
+    background: #0B1525;
+  }
+  #tv-chart { width: 100%; height: 100%; }
+
+  .vol-container {
+    height: 90px;
+    background: #0B1525;
+    border-top: 1px solid rgba(255,255,255,.06);
+    position: relative;
+  }
+  #tv-vol { width: 100%; height: 100%; }
+
+  /* ── Sidebar ── */
+  .chart-sidebar {
+    width: 240px;
+    background: var(--navyLight);
+    border-left: 1px solid rgba(255,255,255,.08);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  @media (max-width: 800px) { .chart-sidebar { display: none; } }
+
+  .sidebar-section {
+    padding: 14px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .sidebar-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(201,161,74,.3);
+    padding-bottom: 4px;
+  }
+  .ohlc-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: rgba(255,255,255,.6);
+    padding: 2px 0;
+  }
+  .ohlc-row .val {
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .iv-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .iv-stat:last-child { border-bottom: none; }
+  .iv-name { font-size: 9px; letter-spacing: 1.5px; color: rgba(255,255,255,.4); text-transform: uppercase; }
+  .iv-val  { font-size: 18px; font-weight: 700; color: #fff; }
+  .iv-bar  { height: 4px; background: rgba(255,255,255,.1); border-radius: 2px; margin-top: 2px; }
+  .iv-bar-fill { height: 100%; border-radius: 2px; background: var(--gold); transition: width .4s; }
+
+  /* ── Price overlay ── */
+  .price-overlay {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .price-big {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .price-chg {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .price-chg.up { color: #4CAF50; }
+  .price-chg.dn { color: #EF5350; }
+
+  .bid-ask {
+    display: flex;
+    gap: 14px;
+    margin-top: 4px;
+  }
+  .ba-item { font-size: 11px; color: rgba(255,255,255,.6); }
+  .ba-item span { color: rgba(255,255,255,.9); font-weight: 600; }
+
+  /* ── Status ── */
+  .chart-status {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255,255,255,.4);
+    font-size: 13px;
+    text-align: center;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="rcm-header-mount"></div>
+
+<!-- ── Control bar ── -->
+<div class="ctrl-bar">
+  <input id="sym-input" class="sym-input" value="EURUSD" placeholder="EURUSD" maxlength="20"
+    onkeydown="if(event.key==='Enter')loadChart()">
+  <button class="btn btn-gold btn-sm" onclick="loadChart()">Load</button>
+
+  <div class="tf-group">
+    <button class="tf-btn" data-tf="1m"  onclick="setTf('1m')">1m</button>
+    <button class="tf-btn" data-tf="5m"  onclick="setTf('5m')">5m</button>
+    <button class="tf-btn" data-tf="15m" onclick="setTf('15m')">15m</button>
+    <button class="tf-btn" data-tf="1H"  onclick="setTf('1H')">1H</button>
+    <button class="tf-btn" data-tf="4H"  onclick="setTf('4H')">4H</button>
+    <button class="tf-btn active" data-tf="1D" onclick="setTf('1D')">1D</button>
+    <button class="tf-btn" data-tf="1W"  onclick="setTf('1W')">1W</button>
+  </div>
+
+  <div class="chart-type-group">
+    <button class="ct-btn active" data-ct="candlestick" onclick="setChartType('candlestick')" title="Candlestick">🕯</button>
+    <button class="ct-btn" data-ct="bar"         onclick="setChartType('bar')"         title="Bar">📊</button>
+    <button class="ct-btn" data-ct="line"        onclick="setChartType('line')"        title="Line">📉</button>
+  </div>
+
+  <label style="display:flex;align-items:center;gap:6px;color:rgba(255,255,255,.6);font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">
+    <input type="checkbox" id="show-iv" onchange="toggleIV()" style="accent-color:var(--gold);">
+    IV OVERLAY
+  </label>
+
+  <button class="btn btn-ghost btn-sm" onclick="loadChart()" style="margin-left:auto;color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.15);">
+    ↻ Refresh
+  </button>
+  <button class="btn btn-gold btn-sm" onclick="openTradeSetup()">+ Trade Setup</button>
+</div>
+
+<!-- ── Main layout ── -->
+<div class="terminal-layout">
+
+  <div class="chart-main">
+    <!-- Price chart -->
+    <div class="chart-container">
+      <div id="tv-chart"></div>
+      <div class="price-overlay">
+        <div class="price-big" id="price-big">—</div>
+        <div class="price-chg" id="price-chg"></div>
+        <div class="bid-ask" id="bid-ask"></div>
+      </div>
+      <div class="chart-status" id="chart-status">Enter a symbol and click Load</div>
+    </div>
+    <!-- Volume chart -->
+    <div class="vol-container">
+      <div id="tv-vol"></div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="chart-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">OHLC</div>
+      <div class="ohlc-row"><span>Open</span><span class="val" id="sb-o">—</span></div>
+      <div class="ohlc-row"><span>High</span><span class="val" id="sb-h" style="color:#4CAF50">—</span></div>
+      <div class="ohlc-row"><span>Low</span><span class="val" id="sb-l" style="color:#EF5350">—</span></div>
+      <div class="ohlc-row"><span>Close</span><span class="val" id="sb-c">—</span></div>
+      <div class="ohlc-row"><span>Volume</span><span class="val" id="sb-v">—</span></div>
+    </div>
+
+    <div class="sidebar-section" id="iv-section">
+      <div class="sidebar-label">Options / IV</div>
+      <div class="iv-stat">
+        <div class="iv-name">Implied Vol</div>
+        <div class="iv-val" id="iv-val">—</div>
+      </div>
+      <div class="iv-stat">
+        <div class="iv-name">IV Rank (52W)</div>
+        <div class="iv-val" id="ivr-val">—</div>
+        <div class="iv-bar"><div class="iv-bar-fill" id="ivr-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Quick Actions</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn btn-trade" onclick="openTradeSetup()" style="justify-content:center;">⚡ New Trade Setup</button>
+        <button class="btn btn-ghost btn-sm" onclick="window.location.href='../options/index.html'" style="justify-content:center;color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.2);">Options Scanner</button>
+        <button class="btn btn-ghost btn-sm" onclick="window.location.href='../journal/index.html'" style="justify-content:center;color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.2);">Trade Journal</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Watchlist</div>
+      <div id="watchlist" style="display:flex;flex-direction:column;gap:4px;">
+        <!-- injected by JS -->
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="../shared/rcm-utils.js"></script>
+<script>
+// ── Header ──
+document.getElementById('rcm-header-mount').innerHTML = RCM.buildHeader({
+  title: 'Terminal',
+  activePage: 'terminal',
+});
+RCM.updateSourceBadge();
+
+// ── State ──
+let currentSym = localStorage.getItem('rcm_terminal_sym') || 'EURUSD';
+let currentTf  = RCM.loadSetting('terminal_tf', '1D');
+let currentCt  = RCM.loadSetting('terminal_ct', 'candlestick');
+let mainChart, mainSeries, volChart, volSeries;
+let digits = 5;
+
+// ── Init charts ──
+function initCharts() {
+  const chartOpts = {
+    layout: { background: { color: '#0B1525' }, textColor: 'rgba(255,255,255,.7)' },
+    grid:   { vertLines: { color: 'rgba(255,255,255,.04)' }, horzLines: { color: 'rgba(255,255,255,.04)' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: 'rgba(255,255,255,.1)', scaleMargins: { top: 0.08, bottom: 0.1 } },
+    timeScale: { borderColor: 'rgba(255,255,255,.1)', timeVisible: true, secondsVisible: false },
+    handleScroll: true,
+    handleScale:  true,
+  };
+
+  mainChart = LightweightCharts.createChart(document.getElementById('tv-chart'), chartOpts);
+  volChart  = LightweightCharts.createChart(document.getElementById('tv-vol'), {
+    ...chartOpts,
+    height: 90,
+    rightPriceScale: { visible: false },
+    leftPriceScale:  { visible: false },
+    timeScale: { visible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Hidden },
+  });
+
+  // Sync time scales
+  mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    if (range) volChart.timeScale().setVisibleLogicalRange(range);
+  });
+
+  // Resize observer
+  const ro = new ResizeObserver(() => {
+    const main = document.getElementById('tv-chart');
+    const vol  = document.getElementById('tv-vol');
+    mainChart.applyOptions({ width: main.clientWidth, height: main.clientHeight });
+    volChart.applyOptions({ width: vol.clientWidth });
+  });
+  ro.observe(document.getElementById('tv-chart'));
+  ro.observe(document.getElementById('tv-vol'));
+
+  // Crosshair move → update sidebar OHLC
+  mainChart.subscribeCrosshairMove(p => {
+    if (!p.seriesData) return;
+    const d = p.seriesData.get(mainSeries);
+    if (!d) return;
+    document.getElementById('sb-o').textContent = RCM.fmt.price(d.open ?? d.value, digits);
+    document.getElementById('sb-h').textContent = RCM.fmt.price(d.high ?? d.value, digits);
+    document.getElementById('sb-l').textContent = RCM.fmt.price(d.low  ?? d.value, digits);
+    document.getElementById('sb-c').textContent = RCM.fmt.price(d.close ?? d.value, digits);
+    const vd = p.seriesData.get(volSeries);
+    if (vd) document.getElementById('sb-v').textContent = RCM.fmt.compact(vd.value);
+  });
+}
+
+// ── Load chart data ──
+async function loadChart() {
+  const sym = document.getElementById('sym-input').value.trim().toUpperCase();
+  if (!sym) return;
+  currentSym = sym;
+  localStorage.setItem('rcm_terminal_sym', sym);
+  document.getElementById('sym-input').value = sym;
+
+  // Set decimal precision heuristic
+  digits = sym.includes('JPY') ? 3 : sym.length === 6 && /^[A-Z]+$/.test(sym) ? 5 : 2;
+
+  document.getElementById('chart-status').textContent = 'Loading ' + sym + '…';
+  document.getElementById('price-big').textContent = '—';
+  document.getElementById('price-chg').textContent = '';
+
+  try {
+    // Clear existing series
+    if (mainSeries) { try { mainChart.removeSeries(mainSeries); } catch {} }
+    if (volSeries)  { try { volChart.removeSeries(volSeries);   } catch {} }
+
+    // Fetch bars
+    const bars = await RCM.history(sym, currentTf, 300);
+    if (!bars.length) throw new Error('No data returned');
+
+    // Convert time strings → Unix timestamps
+    const toTs = (t) => {
+      if (typeof t === 'number') return t;
+      return Math.floor(new Date(t).getTime() / 1000);
+    };
+
+    const priceData = bars.map(b => ({
+      time:  toTs(b.time),
+      open:  b.open, high: b.high, low: b.low, close: b.close,
+    })).filter(b => b.time && b.close);
+
+    const volData = bars.map(b => ({
+      time:  toTs(b.time),
+      value: b.volume ?? 0,
+      color: (b.close >= b.open) ? 'rgba(26,110,46,.6)' : 'rgba(168,32,32,.6)',
+    })).filter(b => b.time);
+
+    // Build series per chart type
+    if (currentCt === 'candlestick') {
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: '#1A6E2E', downColor: '#A82020',
+        borderUpColor: '#1A6E2E', borderDownColor: '#A82020',
+        wickUpColor: '#1A6E2E', wickDownColor: '#A82020',
+      });
+    } else if (currentCt === 'bar') {
+      mainSeries = mainChart.addBarSeries({
+        upColor: '#1A6E2E', downColor: '#A82020',
+      });
+    } else {
+      mainSeries = mainChart.addLineSeries({
+        color: '#C9A14A', lineWidth: 2,
+        crosshairMarkerVisible: true,
+        crosshairMarkerRadius: 4,
+        priceLineVisible: true,
+      });
+      // Line series uses {time, value}
+      mainSeries.setData(priceData.map(b => ({ time: b.time, value: b.close })));
+      volSeries = volChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+      volSeries.setData(volData);
+      finishLoad(bars);
+      return;
+    }
+
+    mainSeries.setData(priceData);
+    volSeries = volChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+    volSeries.setData(volData);
+
+    mainChart.timeScale().fitContent();
+    finishLoad(bars);
+
+    document.getElementById('chart-status').textContent = '';
+
+  } catch (e) {
+    document.getElementById('chart-status').textContent = '⚠ ' + e.message;
+  }
+
+  // Fetch live quote overlay
+  try {
+    const q = await RCM.quote(sym);
+    if (q.last) {
+      document.getElementById('price-big').textContent = RCM.fmt.price(q.last, digits);
+      const chgEl = document.getElementById('price-chg');
+      chgEl.textContent = q.changePct != null ? RCM.fmt.pct(q.changePct) : '';
+      chgEl.className = 'price-chg ' + (q.changePct > 0 ? 'up' : q.changePct < 0 ? 'dn' : '');
+
+      if (q.bid && q.ask) {
+        document.getElementById('bid-ask').innerHTML =
+          `<div class="ba-item">Bid <span>${RCM.fmt.price(q.bid, digits)}</span></div>
+           <div class="ba-item">Ask <span>${RCM.fmt.price(q.ask, digits)}</span></div>`;
+      }
+    }
+  } catch {}
+
+  // IV data if enabled
+  if (document.getElementById('show-iv').checked) {
+    loadIV(sym);
+  }
+
+  // Update watchlist
+  updateWatchlist(sym);
+}
+
+function finishLoad(bars) {
+  if (!bars.length) return;
+  const last = bars[bars.length - 1];
+  const prev = bars[bars.length - 2];
+  document.getElementById('sb-o').textContent = RCM.fmt.price(last.open, digits);
+  document.getElementById('sb-h').textContent = RCM.fmt.price(last.high, digits);
+  document.getElementById('sb-l').textContent = RCM.fmt.price(last.low, digits);
+  document.getElementById('sb-c').textContent = RCM.fmt.price(last.close, digits);
+  document.getElementById('sb-v').textContent = RCM.fmt.compact(last.volume);
+}
+
+// ── Timeframe / chart type ──
+function setTf(tf) {
+  currentTf = tf;
+  RCM.saveSetting('terminal_tf', tf);
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.dataset.tf === tf));
+  loadChart();
+}
+
+function setChartType(ct) {
+  currentCt = ct;
+  RCM.saveSetting('terminal_ct', ct);
+  document.querySelectorAll('.ct-btn').forEach(b => b.classList.toggle('active', b.dataset.ct === ct));
+  loadChart();
+}
+
+// ── IV overlay ──
+async function loadIV(sym) {
+  document.getElementById('iv-val').textContent = '…';
+  document.getElementById('ivr-val').textContent = '…';
+  try {
+    const iv = await RCM.optionsIV(sym);
+    if (!iv) { document.getElementById('iv-val').textContent = 'N/A (IB req)'; return; }
+    if (iv.iv) {
+      const ivPct = typeof iv.iv === 'number' ? (iv.iv * 100).toFixed(1) + '%' : String(iv.iv);
+      document.getElementById('iv-val').textContent = ivPct;
+    }
+    if (iv.ivRank) {
+      const rank = typeof iv.ivRank === 'object' ? iv.ivRank?.percentile52w ?? iv.ivRank : iv.ivRank;
+      const pct = parseFloat(rank) || 0;
+      document.getElementById('ivr-val').textContent = pct.toFixed(0) + '%';
+      document.getElementById('ivr-bar').style.width = Math.min(pct, 100) + '%';
+      document.getElementById('ivr-bar').style.background = pct > 70 ? '#A82020' : pct > 40 ? '#C9A14A' : '#1A6E2E';
+    }
+  } catch {
+    document.getElementById('iv-val').textContent = 'Unavail';
+  }
+}
+
+function toggleIV() {
+  const on = document.getElementById('show-iv').checked;
+  if (on && currentSym) loadIV(currentSym);
+}
+
+// ── Watchlist ──
+const WATCH_SYMS = ['EURUSD','GBPUSD','USDJPY','AUDUSD','SPY','GLD'];
+
+async function updateWatchlist(activeSym) {
+  const el = document.getElementById('watchlist');
+  el.innerHTML = '<div style="color:rgba(255,255,255,.3);font-size:11px;">Loading…</div>';
+  try {
+    const quotes = await RCM.batchQuotes(WATCH_SYMS);
+    el.innerHTML = quotes.map((q, i) => {
+      const sym = WATCH_SYMS[i];
+      const active = sym === activeSym;
+      const cls = q.changePct > 0 ? '#4CAF50' : q.changePct < 0 ? '#EF5350' : 'rgba(255,255,255,.4)';
+      return `
+        <div onclick="document.getElementById('sym-input').value='${sym}';loadChart();"
+          style="display:flex;justify-content:space-between;align-items:center;
+                 padding:5px 6px;border-radius:4px;cursor:pointer;
+                 background:${active ? 'rgba(201,161,74,.15)' : 'transparent'};
+                 border:1px solid ${active ? 'rgba(201,161,74,.4)' : 'transparent'};">
+          <span style="font-size:11px;font-weight:700;color:${active ? 'var(--gold)' : '#fff'};">${sym}</span>
+          <div style="text-align:right;">
+            <div style="font-size:11px;color:#fff;font-variant-numeric:tabular-nums;">${q.last ? RCM.fmt.price(q.last, sym.includes('JPY')?3:5) : '—'}</div>
+            <div style="font-size:10px;color:${cls};">${q.changePct != null ? RCM.fmt.pct(q.changePct) : ''}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch {
+    el.innerHTML = '<div style="color:rgba(255,255,255,.3);font-size:11px;">Unavailable</div>';
+  }
+}
+
+// ── Open trade setup ──
+function openTradeSetup() {
+  localStorage.setItem('rcm_setup_sym', currentSym);
+  window.location.href = '../trade-setup/index.html';
+}
+
+// ── Boot ──
+initCharts();
+
+// Restore TF/CT buttons
+document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.dataset.tf === currentTf));
+document.querySelectorAll('.ct-btn').forEach(b => b.classList.toggle('active', b.dataset.ct === currentCt));
+document.getElementById('sym-input').value = currentSym;
+
+loadChart();
+updateWatchlist(currentSym);
+</script>
+</body>
+</html>

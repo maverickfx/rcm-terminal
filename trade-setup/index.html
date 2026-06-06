@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCM Trade Setup</title>
+<link rel="stylesheet" href="../shared/rcm-style.css">
+<style>
+  .setup-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .setup-layout { grid-template-columns: 1fr; } }
+
+  .inst-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .inst-tab {
+    padding: 6px 14px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+    background: var(--card);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .inst-tab:hover { border-color: var(--gold); color: var(--navy); }
+  .inst-tab.active { background: var(--navy); color: var(--gold); border-color: var(--navy); }
+
+  .calc-panel {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+  }
+
+  .result-panel {
+    background: var(--navy);
+    border-radius: 8px;
+    padding: 24px;
+    color: #fff;
+    position: sticky;
+    top: 80px;
+  }
+
+  .result-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 18px;
+    border-bottom: 1px solid rgba(201,161,74,.3);
+    padding-bottom: 8px;
+  }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+    font-size: 13px;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-row .r-label { color: rgba(255,255,255,.5); font-size: 11px; }
+  .result-row .r-val   { font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  .result-row .r-val.positive { color: #4CAF50; }
+  .result-row .r-val.negative { color: #EF5350; }
+  .result-row .r-val.gold     { color: var(--gold); }
+
+  .rr-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 18px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  .rr-badge.good { background: rgba(26,110,46,.3); color: #4CAF50; }
+  .rr-badge.ok   { background: rgba(201,161,74,.3); color: var(--gold); }
+  .rr-badge.poor { background: rgba(168,32,32,.3);  color: #EF5350; }
+
+  .export-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .dir-toggle { margin-bottom: 0; }
+
+  .auto-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .inst-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .badge-fx      { background: rgba(26,110,46,.15);  color: var(--trade); border: 1px solid var(--trade); }
+  .badge-cfd     { background: rgba(201,161,74,.15); color: var(--gold);  border: 1px solid var(--gold); }
+  .badge-futures { background: rgba(11,29,58,.15);   color: var(--navy);  border: 1px solid var(--navy); }
+  .badge-options { background: rgba(168,32,32,.15);  color: var(--risk);  border: 1px solid var(--risk); }
+  .badge-equity  { background: rgba(26,110,46,.15);  color: var(--trade); border: 1px solid var(--trade); }
+
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+
+<div id="rcm-header-mount"></div>
+
+<div class="rcm-body">
+  <div style="margin-bottom:20px;">
+    <div class="section-label" style="margin-bottom:12px;">Instrument Type</div>
+    <div class="inst-tabs">
+      <button class="inst-tab active" data-inst="fx"       onclick="setInst('fx')">FX Spot</button>
+      <button class="inst-tab"        data-inst="cfd"      onclick="setInst('cfd')">CFDs</button>
+      <button class="inst-tab"        data-inst="futures"  onclick="setInst('futures')">Futures</button>
+      <button class="inst-tab"        data-inst="equity"   onclick="setInst('equity')">Equities</button>
+      <button class="inst-tab"        data-inst="eqopt"    onclick="setInst('eqopt')">Equity Options</button>
+      <button class="inst-tab"        data-inst="futopt"   onclick="setInst('futopt')">Futures Options</button>
+    </div>
+  </div>
+
+  <div class="setup-layout">
+    <!-- ── Left: Input panel ── -->
+    <div>
+      <!-- FX SPOT ─────────────────────────────────── -->
+      <div id="form-fx" class="calc-panel">
+        <div class="inst-badge badge-fx">FX Spot · Axi MT4</div>
+        <div class="form-group">
+          <label class="form-label">Currency Pair</label>
+          <input class="form-control" id="fx-sym" value="EURUSD" placeholder="EURUSD" oninput="calcFX()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Direction</label>
+          <div class="dir-toggle">
+            <button class="dir-btn long active" onclick="setDir('fx','long',this)">LONG</button>
+            <button class="dir-btn short"       onclick="setDir('fx','short',this)">SHORT</button>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Entry Price</label>
+            <input class="form-control" id="fx-entry" type="number" step="0.00001" placeholder="1.08500" oninput="calcFX()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stop Loss</label>
+            <input class="form-control" id="fx-stop" type="number" step="0.00001" placeholder="1.08200" oninput="calcFX()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Take Profit</label>
+            <input class="form-control" id="fx-tp" type="number" step="0.00001" placeholder="1.09100" oninput="calcFX()">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Lot Size</label>
+            <input class="form-control" id="fx-lots" type="number" step="0.01" value="0.10" placeholder="0.10" oninput="calcFX()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account Balance (USD)</label>
+            <input class="form-control" id="fx-balance" type="number" value="10000" placeholder="10000" oninput="calcFX()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Setup Type</label>
+          <select class="form-control" id="fx-setup" onchange="calcFX()">
+            <option>Trend Continuation</option>
+            <option>Breakout</option>
+            <option>Reversal</option>
+            <option>Range</option>
+            <option>News Trade</option>
+            <option>Custom</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Trading Session</label>
+          <select class="form-control" id="fx-session">
+            <option>Asia</option>
+            <option>London Open</option>
+            <option>London</option>
+            <option>New York</option>
+            <option>London/NY Overlap</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="fx-notes" rows="2" placeholder="Setup rationale, key levels…" style="resize:vertical;"></textarea>
+        </div>
+      </div>
+
+      <!-- CFD ─────────────────────────────────────── -->
+      <div id="form-cfd" class="calc-panel" style="display:none;">
+        <div class="inst-badge badge-cfd">CFD · Axi MT4</div>
+        <div class="form-group">
+          <label class="form-label">Instrument</label>
+          <input class="form-control" id="cfd-sym" value="XAUUSD" placeholder="XAUUSD / US30 / etc." oninput="calcCFD()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Direction</label>
+          <div class="dir-toggle">
+            <button class="dir-btn long active" onclick="setDir('cfd','long',this)">LONG</button>
+            <button class="dir-btn short"       onclick="setDir('cfd','short',this)">SHORT</button>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Entry</label>
+            <input class="form-control" id="cfd-entry" type="number" step="0.01" oninput="calcCFD()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stop Loss</label>
+            <input class="form-control" id="cfd-stop" type="number" step="0.01" oninput="calcCFD()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Take Profit</label>
+            <input class="form-control" id="cfd-tp" type="number" step="0.01" oninput="calcCFD()">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Contracts / Lots</label>
+            <input class="form-control" id="cfd-lots" type="number" step="0.01" value="1" oninput="calcCFD()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Point Value (USD)</label>
+            <input class="form-control" id="cfd-pointval" type="number" value="1" placeholder="e.g. 1 for US30" oninput="calcCFD()">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Margin Rate (%)</label>
+            <input class="form-control" id="cfd-margin" type="number" value="1" step="0.1" oninput="calcCFD()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account Balance (USD)</label>
+            <input class="form-control" id="cfd-balance" type="number" value="10000" oninput="calcCFD()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Swap Long (per lot/night)</label>
+          <input class="form-control" id="cfd-swap" type="number" step="0.01" placeholder="Check Axi spec" oninput="calcCFD()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="cfd-notes" rows="2" placeholder="Setup rationale…" style="resize:vertical;"></textarea>
+        </div>
+      </div>
+
+      <!-- FUTURES ─────────────────────────────────── -->
+      <div id="form-futures" class="calc-panel" style="display:none;">
+        <div class="inst-badge badge-futures">Futures · IB</div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Symbol</label>
+            <input class="form-control" id="fut-sym" value="ESM25" placeholder="ESM25" oninput="calcFutures()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Exchange</label>
+            <input class="form-control" id="fut-exch" placeholder="CME / CBOT / NYMEX" value="CME">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Direction</label>
+          <div class="dir-toggle">
+            <button class="dir-btn long active" onclick="setDir('fut','long',this)">LONG</button>
+            <button class="dir-btn short"       onclick="setDir('fut','short',this)">SHORT</button>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Entry</label>
+            <input class="form-control" id="fut-entry" type="number" step="0.25" oninput="calcFutures()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stop Loss</label>
+            <input class="form-control" id="fut-stop" type="number" step="0.25" oninput="calcFutures()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Take Profit</label>
+            <input class="form-control" id="fut-tp" type="number" step="0.25" oninput="calcFutures()">
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Contracts</label>
+            <input class="form-control" id="fut-qty" type="number" value="1" min="1" oninput="calcFutures()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tick Size</label>
+            <input class="form-control" id="fut-tick" type="number" step="0.01" value="0.25" oninput="calcFutures()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tick Value (USD)</label>
+            <input class="form-control" id="fut-tickval" type="number" step="0.01" value="12.50" oninput="calcFutures()">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Init Margin / Contract</label>
+            <input class="form-control" id="fut-margin" type="number" placeholder="IB margin" oninput="calcFutures()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Roll Date</label>
+            <input class="form-control" id="fut-roll" type="date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="fut-notes" rows="2" placeholder="Setup rationale…" style="resize:vertical;"></textarea>
+        </div>
+      </div>
+
+      <!-- EQUITY ──────────────────────────────────── -->
+      <div id="form-equity" class="calc-panel" style="display:none;">
+        <div class="inst-badge badge-equity">Equities · IB</div>
+        <div class="form-group">
+          <label class="form-label">Ticker</label>
+          <input class="form-control" id="eq-sym" placeholder="AAPL / NVDA / SPY" oninput="calcEquity()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Direction</label>
+          <div class="dir-toggle">
+            <button class="dir-btn long active" onclick="setDir('eq','long',this)">LONG</button>
+            <button class="dir-btn short"       onclick="setDir('eq','short',this)">SHORT</button>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Entry Price</label>
+            <input class="form-control" id="eq-entry" type="number" step="0.01" oninput="calcEquity()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stop Loss</label>
+            <input class="form-control" id="eq-stop" type="number" step="0.01" oninput="calcEquity()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Take Profit</label>
+            <input class="form-control" id="eq-tp" type="number" step="0.01" oninput="calcEquity()">
+          </div>
+        </div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Shares</label>
+            <input class="form-control" id="eq-shares" type="number" value="100" oninput="calcEquity()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account Net Liq (USD)</label>
+            <input class="form-control" id="eq-netliq" type="number" value="100000" oninput="calcEquity()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="eq-notes" rows="2" placeholder="Setup rationale…" style="resize:vertical;"></textarea>
+        </div>
+      </div>
+
+      <!-- EQUITY OPTIONS ──────────────────────────── -->
+      <div id="form-eqopt" class="calc-panel" style="display:none;">
+        <div class="inst-badge badge-options">Equity Options · IB</div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Underlying</label>
+            <input class="form-control" id="eqo-sym" placeholder="SPY / AAPL" oninput="calcEqOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Strategy</label>
+            <select class="form-control" id="eqo-strategy" onchange="calcEqOpt()">
+              <option value="long_call">Long Call</option>
+              <option value="long_put">Long Put</option>
+              <option value="call_spread">Call Spread</option>
+              <option value="put_spread">Put Spread</option>
+              <option value="strangle">Strangle / Straddle</option>
+              <option value="iron_condor">Iron Condor</option>
+              <option value="covered_call">Covered Call</option>
+              <option value="cash_put">Cash-Secured Put</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+        </div>
+        <!-- Leg 1 -->
+        <div class="section-label" style="margin-bottom:10px;">Primary Leg</div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Strike</label>
+            <input class="form-control" id="eqo-strike1" type="number" step="0.5" placeholder="500" oninput="calcEqOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-control" id="eqo-type1" onchange="calcEqOpt()">
+              <option>Call</option><option>Put</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Action</label>
+            <select class="form-control" id="eqo-action1" onchange="calcEqOpt()">
+              <option>Buy</option><option>Sell</option>
+            </select>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Premium / Contract</label>
+            <input class="form-control" id="eqo-prem1" type="number" step="0.01" placeholder="2.50" oninput="calcEqOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Expiry (DTE)</label>
+            <input class="form-control" id="eqo-expiry" type="date" oninput="calcEqOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contracts</label>
+            <input class="form-control" id="eqo-qty" type="number" value="1" oninput="calcEqOpt()">
+          </div>
+        </div>
+        <!-- Leg 2 (for spreads) -->
+        <div class="section-label" style="margin-bottom:10px;">Second Leg (Spread)</div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Strike</label>
+            <input class="form-control" id="eqo-strike2" type="number" step="0.5" placeholder="Optional" oninput="calcEqOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-control" id="eqo-type2" onchange="calcEqOpt()">
+              <option>Call</option><option>Put</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Action</label>
+            <select class="form-control" id="eqo-action2" onchange="calcEqOpt()">
+              <option>Sell</option><option>Buy</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Leg 2 Premium</label>
+          <input class="form-control" id="eqo-prem2" type="number" step="0.01" placeholder="Optional — credit received" oninput="calcEqOpt()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="eqo-notes" rows="2" style="resize:vertical;"></textarea>
+        </div>
+      </div>
+
+      <!-- FUTURES OPTIONS ─────────────────────────── -->
+      <div id="form-futopt" class="calc-panel" style="display:none;">
+        <div class="inst-badge badge-options">Futures Options · IB</div>
+        <div class="row2">
+          <div class="form-group">
+            <label class="form-label">Underlying Future</label>
+            <input class="form-control" id="futo-sym" placeholder="ESM25 / CLN25" oninput="calcFutOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Strategy</label>
+            <select class="form-control" id="futo-strategy">
+              <option>Long Call</option>
+              <option>Long Put</option>
+              <option>Short Strangle</option>
+              <option>Vertical Spread</option>
+              <option>Custom</option>
+            </select>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Strike</label>
+            <input class="form-control" id="futo-strike" type="number" step="1" oninput="calcFutOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-control" id="futo-type" onchange="calcFutOpt()">
+              <option>Call</option><option>Put</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Action</label>
+            <select class="form-control" id="futo-action" onchange="calcFutOpt()">
+              <option>Buy</option><option>Sell</option>
+            </select>
+          </div>
+        </div>
+        <div class="row3">
+          <div class="form-group">
+            <label class="form-label">Premium / Contract</label>
+            <input class="form-control" id="futo-prem" type="number" step="0.25" oninput="calcFutOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Multiplier</label>
+            <input class="form-control" id="futo-mult" type="number" value="50" placeholder="50 for ES" oninput="calcFutOpt()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contracts</label>
+            <input class="form-control" id="futo-qty" type="number" value="1" oninput="calcFutOpt()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">SPAN Margin Estimate</label>
+          <input class="form-control" id="futo-span" type="number" placeholder="From IB or CME" oninput="calcFutOpt()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Expiry</label>
+          <input class="form-control" id="futo-expiry" type="date" oninput="calcFutOpt()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-control" id="futo-notes" rows="2" style="resize:vertical;"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right: Results panel ── -->
+    <div class="result-panel" id="result-panel">
+      <div class="result-title" id="result-title">FX Spot — Risk Summary</div>
+
+      <div style="text-align:center;margin:16px 0;">
+        <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:6px;">RISK/REWARD RATIO</div>
+        <div class="rr-badge ok" id="rr-badge">1:—</div>
+      </div>
+
+      <div id="result-rows">
+        <!-- Injected by JS -->
+        <div style="color:rgba(255,255,255,.3);font-size:12px;text-align:center;padding:20px;">
+          Fill in trade parameters to see calculations
+        </div>
+      </div>
+
+      <div class="export-row">
+        <button class="btn btn-gold" onclick="exportSetup()" style="flex:1;justify-content:center;">📋 Copy Setup</button>
+        <button class="btn btn-trade" onclick="sendToTerminal()" style="flex:1;justify-content:center;">📈 View Chart</button>
+      </div>
+
+      <div id="mt4-section" style="margin-top:14px;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase;margin-bottom:8px;">
+          MT4 Bridge (FX / CFD)
+        </div>
+        <button class="btn btn-danger" onclick="sendToMT4()" style="width:100%;justify-content:center;">
+          ⚡ Stage in MT4 File Bridge
+        </button>
+        <div id="mt4-status" style="margin-top:6px;font-size:10px;color:rgba(255,255,255,.3);text-align:center;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/rcm-utils.js"></script>
+<script>
+
+// ── State ──
+const state = {
+  inst:  'fx',
+  dirs:  { fx: 'long', cfd: 'long', fut: 'long', eq: 'long' },
+  results: {},
+};
+
+// ── Header ──
+document.getElementById('rcm-header-mount').innerHTML = RCM.buildHeader({
+  title: 'Trade Setup Generator',
+  activePage: 'tradesetup',
+});
+RCM.updateSourceBadge();
+
+// Restore symbol from terminal
+const savedSym = localStorage.getItem('rcm_setup_sym') || '';
+if (savedSym) {
+  const fxInput = document.getElementById('fx-sym');
+  if (fxInput) fxInput.value = savedSym;
+}
+
+// ── Instrument switcher ──
+function setInst(inst) {
+  state.inst = inst;
+  document.querySelectorAll('.inst-tab').forEach(b => b.classList.toggle('active', b.dataset.inst === inst));
+  ['fx','cfd','futures','equity','eqopt','futopt'].forEach(id => {
+    const el = document.getElementById('form-' + id);
+    if (el) el.style.display = id === inst ? 'block' : 'none';
+  });
+  const titles = {
+    fx: 'FX Spot — Risk Summary', cfd: 'CFD — Risk Summary',
+    futures: 'Futures — Risk Summary', equity: 'Equity — Risk Summary',
+    eqopt: 'Equity Options — P&L Summary', futopt: 'Futures Options — P&L Summary',
+  };
+  document.getElementById('result-title').textContent = titles[inst] || 'Risk Summary';
+  document.getElementById('mt4-section').style.display = (inst === 'fx' || inst === 'cfd') ? 'block' : 'none';
+  clearResults();
+}
+
+function setDir(prefix, dir, btn) {
+  state.dirs[prefix] = dir;
+  const group = btn.closest('.dir-toggle');
+  group.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Recalculate
+  const calcMap = { fx: calcFX, cfd: calcCFD, fut: calcFutures, eq: calcEquity };
+  if (calcMap[prefix]) calcMap[prefix]();
+}
+
+// ── Helpers ──
+const v = (id) => parseFloat(document.getElementById(id)?.value) || 0;
+const s = (id) => document.getElementById(id)?.value?.trim() || '';
+
+function setResults(rows, rr) {
+  state.results = { rows, rr };
+  const el = document.getElementById('result-rows');
+  el.innerHTML = rows.map(r => `
+    <div class="result-row">
+      <span class="r-label">${r.label}</span>
+      <span class="r-val ${r.cls||''}">${r.val}</span>
+    </div>`).join('');
+
+  const badge = document.getElementById('rr-badge');
+  badge.textContent = rr ? '1:' + rr.toFixed(2) : '1:—';
+  badge.className = 'rr-badge ' + (!rr ? 'ok' : rr >= 2 ? 'good' : rr >= 1.5 ? 'ok' : 'poor');
+}
+
+function clearResults() {
+  document.getElementById('result-rows').innerHTML =
+    '<div style="color:rgba(255,255,255,.3);font-size:12px;text-align:center;padding:20px;">Fill in trade parameters to see calculations</div>';
+  document.getElementById('rr-badge').textContent = '1:—';
+  document.getElementById('rr-badge').className = 'rr-badge ok';
+}
+
+// ── FX Spot Calculator ──
+function calcFX() {
+  const entry   = v('fx-entry');
+  const stop    = v('fx-stop');
+  const tp      = v('fx-tp');
+  const lots    = v('fx-lots');
+  const balance = v('fx-balance');
+  const sym     = s('fx-sym').toUpperCase();
+  const dir     = state.dirs.fx;
+
+  if (!entry || !stop || !lots) { clearResults(); return; }
+
+  const isJPY = sym.includes('JPY');
+  const pipSize = isJPY ? 0.01 : 0.0001;
+
+  const riskPips   = Math.abs(entry - stop) / pipSize;
+  const rewardPips = tp ? Math.abs(tp - entry) / pipSize : null;
+  const pipValueUSD = isJPY
+    ? (lots * 100000 * pipSize) / (tp || entry)  // approximate for JPY
+    : lots * 10; // standard: 1 lot = $10/pip, 0.01 lots = $0.10/pip
+
+  // For non-USD quote (EURUSD, GBPUSD): pip value = lots × 10 × 1
+  // For USD quote (USDJPY): pip value = lots × 1000 / current rate
+  const pipValUSD = isJPY ? (lots * 1000) / entry : lots * 10;
+
+  const riskUSD    = riskPips * pipValUSD;
+  const rewardUSD  = rewardPips ? rewardPips * pipValUSD : null;
+  const riskPct    = balance ? (riskUSD / balance) * 100 : null;
+  const rr         = rewardPips && riskPips ? rewardPips / riskPips : null;
+  const marginReq  = lots * 1000 * (1/30); // approximate 1:30 leverage = 3.33%
+
+  // Direction check
+  const valid = dir === 'long'
+    ? (entry > stop && (!tp || tp > entry))
+    : (entry < stop && (!tp || tp < entry));
+
+  const rows = [
+    { label: 'Symbol',         val: sym || '—' },
+    { label: 'Direction',      val: dir.toUpperCase(), cls: dir === 'long' ? 'positive' : 'negative' },
+    { label: 'Entry',          val: RCM.fmt.price(entry, isJPY ? 3 : 5) },
+    { label: 'Stop Loss',      val: RCM.fmt.price(stop, isJPY ? 3 : 5) },
+    { label: 'Risk (pips)',    val: riskPips.toFixed(1) + ' pips' },
+    { label: 'Risk (USD)',     val: RCM.fmt.money(riskUSD), cls: 'negative' },
+    { label: 'Acct Risk',     val: riskPct ? riskPct.toFixed(2) + '%' : '—', cls: riskPct > 3 ? 'negative' : 'positive' },
+    { label: 'Lot Size',       val: lots.toFixed(2) + ' lots' },
+    { label: 'Pip Value',      val: '$' + pipValUSD.toFixed(2) + '/pip' },
+    { label: 'Margin Req',    val: '~' + RCM.fmt.money(marginReq) },
+  ];
+  if (tp) {
+    rows.push({ label: 'Target (pips)', val: rewardPips.toFixed(1) + ' pips' });
+    rows.push({ label: 'Reward (USD)',  val: RCM.fmt.money(rewardUSD), cls: 'positive' });
+  }
+  if (!valid) rows.unshift({ label: '⚠ Direction Check', val: 'Review stop/entry/tp', cls: 'negative' });
+
+  setResults(rows, rr);
+  saveCurrentSetup({ type:'FX', sym, dir, entry, stop, tp, lots, riskUSD, rewardUSD, rr });
+}
+
+// ── CFD Calculator ──
+function calcCFD() {
+  const entry    = v('cfd-entry');
+  const stop     = v('cfd-stop');
+  const tp       = v('cfd-tp');
+  const lots     = v('cfd-lots');
+  const pointVal = v('cfd-pointval') || 1;
+  const marginPct= v('cfd-margin') || 1;
+  const balance  = v('cfd-balance');
+  const dir      = state.dirs.cfd;
+
+  if (!entry || !stop) { clearResults(); return; }
+
+  const riskPoints  = Math.abs(entry - stop);
+  const rewardPoints= tp ? Math.abs(tp - entry) : null;
+  const riskUSD     = riskPoints * pointVal * lots;
+  const rewardUSD   = rewardPoints ? rewardPoints * pointVal * lots : null;
+  const riskPct     = balance ? (riskUSD / balance) * 100 : null;
+  const marginReq   = entry * lots * (marginPct / 100);
+  const rr          = rewardPoints && riskPoints ? rewardPoints / riskPoints : null;
+
+  const rows = [
+    { label: 'Direction',     val: dir.toUpperCase(), cls: dir === 'long' ? 'positive' : 'negative' },
+    { label: 'Entry',         val: RCM.fmt.price(entry, 2) },
+    { label: 'Stop Loss',     val: RCM.fmt.price(stop, 2) },
+    { label: 'Risk (pts)',    val: riskPoints.toFixed(2) + ' pts' },
+    { label: 'Risk (USD)',    val: RCM.fmt.money(riskUSD), cls: 'negative' },
+    { label: 'Acct Risk',    val: riskPct ? riskPct.toFixed(2) + '%' : '—', cls: riskPct > 3 ? 'negative' : 'positive' },
+    { label: 'Margin Req',   val: '~' + RCM.fmt.money(marginReq) },
+    { label: 'Point Value',   val: '$' + pointVal + '/pt' },
+  ];
+  if (tp) {
+    rows.push({ label: 'Reward (pts)', val: rewardPoints.toFixed(2) + ' pts' });
+    rows.push({ label: 'Reward (USD)', val: RCM.fmt.money(rewardUSD), cls: 'positive' });
+  }
+  setResults(rows, rr);
+  saveCurrentSetup({ type:'CFD', dir, entry, stop, tp, lots, riskUSD, rewardUSD, rr });
+}
+
+// ── Futures Calculator ──
+function calcFutures() {
+  const entry   = v('fut-entry');
+  const stop    = v('fut-stop');
+  const tp      = v('fut-tp');
+  const qty     = v('fut-qty') || 1;
+  const tick    = v('fut-tick') || 0.25;
+  const tickVal = v('fut-tickval') || 12.50;
+  const margin  = v('fut-margin');
+  const dir     = state.dirs.fut;
+
+  if (!entry || !stop) { clearResults(); return; }
+
+  const riskTicks  = Math.round(Math.abs(entry - stop) / tick);
+  const rewTicks   = tp ? Math.round(Math.abs(tp - entry) / tick) : null;
+  const riskUSD    = riskTicks * tickVal * qty;
+  const rewardUSD  = rewTicks ? rewTicks * tickVal * qty : null;
+  const rr         = rewTicks && riskTicks ? rewTicks / riskTicks : null;
+
+  const rows = [
+    { label: 'Symbol',        val: s('fut-sym') || '—' },
+    { label: 'Direction',     val: dir.toUpperCase(), cls: dir === 'long' ? 'positive' : 'negative' },
+    { label: 'Entry',         val: RCM.fmt.price(entry, 2) },
+    { label: 'Stop',          val: RCM.fmt.price(stop, 2) },
+    { label: 'Risk (ticks)',  val: riskTicks + ' ticks' },
+    { label: 'Risk (USD)',    val: RCM.fmt.money(riskUSD), cls: 'negative' },
+    { label: 'Contracts',     val: qty },
+    { label: 'Tick Value',    val: '$' + tickVal + '/tick' },
+  ];
+  if (tp) {
+    rows.push({ label: 'Reward (ticks)', val: rewTicks + ' ticks' });
+    rows.push({ label: 'Reward (USD)',   val: RCM.fmt.money(rewardUSD), cls: 'positive' });
+  }
+  if (margin) rows.push({ label: 'Total Margin', val: RCM.fmt.money(margin * qty) });
+  setResults(rows, rr);
+  saveCurrentSetup({ type:'Futures', dir, entry, stop, tp, qty, riskUSD, rewardUSD, rr });
+}
+
+// ── Equity Calculator ──
+function calcEquity() {
+  const entry  = v('eq-entry');
+  const stop   = v('eq-stop');
+  const tp     = v('eq-tp');
+  const shares = v('eq-shares') || 0;
+  const netliq = v('eq-netliq');
+  const dir    = state.dirs.eq;
+
+  if (!entry || !stop || !shares) { clearResults(); return; }
+
+  const riskPer   = Math.abs(entry - stop);
+  const rewPer    = tp ? Math.abs(tp - entry) : null;
+  const riskUSD   = riskPer * shares;
+  const rewardUSD = rewPer ? rewPer * shares : null;
+  const riskPct   = netliq ? (riskUSD / netliq) * 100 : null;
+  const posVal    = entry * shares;
+  const rr        = rewPer && riskPer ? rewPer / riskPer : null;
+
+  const rows = [
+    { label: 'Symbol',        val: s('eq-sym') || '—' },
+    { label: 'Direction',     val: dir.toUpperCase(), cls: dir === 'long' ? 'positive' : 'negative' },
+    { label: 'Entry',         val: '$' + RCM.fmt.price(entry, 2) },
+    { label: 'Stop',          val: '$' + RCM.fmt.price(stop, 2) },
+    { label: 'Risk / Share',  val: '$' + riskPer.toFixed(2) },
+    { label: 'Risk (USD)',    val: RCM.fmt.money(riskUSD), cls: 'negative' },
+    { label: 'Acct Risk',    val: riskPct ? riskPct.toFixed(2) + '%' : '—', cls: riskPct > 2 ? 'negative' : 'positive' },
+    { label: 'Shares',        val: shares.toLocaleString() },
+    { label: 'Position Value',val: RCM.fmt.money(posVal) },
+  ];
+  if (tp) {
+    rows.push({ label: 'Reward / Share', val: '$' + rewPer.toFixed(2) });
+    rows.push({ label: 'Reward (USD)',   val: RCM.fmt.money(rewardUSD), cls: 'positive' });
+  }
+  setResults(rows, rr);
+  saveCurrentSetup({ type:'Equity', dir, entry, stop, tp, shares, riskUSD, rewardUSD, rr });
+}
+
+// ── Equity Options Calculator ──
+function calcEqOpt() {
+  const prem1  = v('eqo-prem1');
+  const prem2  = v('eqo-prem2');
+  const qty    = v('eqo-qty') || 1;
+  const strike1= v('eqo-strike1');
+  const strike2= v('eqo-strike2');
+  const expiry = document.getElementById('eqo-expiry')?.value;
+  const action1= s('eqo-action1');
+  const action2= s('eqo-action2');
+  const type1  = s('eqo-type1');
+
+  if (!prem1 || !strike1) { clearResults(); return; }
+
+  const dte  = expiry ? Math.ceil((new Date(expiry) - new Date()) / 86400000) : null;
+  const netDebit = action1 === 'Buy'
+    ? (prem1 - (prem2 || 0)) * qty * 100
+    : -(prem1 - (prem2 || 0)) * qty * 100;
+
+  const maxRisk   = Math.max(0, netDebit);  // simplified — buy side
+  const maxProfit = strike2 ? Math.abs(strike2 - strike1) * qty * 100 - netDebit : null;
+
+  // Breakeven
+  const be = type1 === 'Call'
+    ? action1 === 'Buy' ? strike1 + prem1 : strike1 - prem1
+    : action1 === 'Buy' ? strike1 - prem1 : strike1 + prem1;
+
+  const rows = [
+    { label: 'Underlying',    val: s('eqo-sym') || '—' },
+    { label: 'Strategy',      val: s('eqo-strategy') },
+    { label: 'DTE',           val: dte != null ? dte + ' days' : '—', cls: dte < 7 ? 'negative' : '' },
+    { label: 'Net Debit',     val: RCM.fmt.money(netDebit), cls: netDebit > 0 ? 'negative' : 'positive' },
+    { label: 'Max Risk',      val: RCM.fmt.money(maxRisk), cls: 'negative' },
+    { label: 'Breakeven',     val: '$' + be.toFixed(2), cls: 'gold' },
+    { label: 'Contracts',     val: qty },
+  ];
+  if (maxProfit != null) rows.push({ label: 'Max Profit', val: RCM.fmt.money(maxProfit), cls: 'positive' });
+  const rr = maxProfit && maxRisk ? maxProfit / maxRisk : null;
+  setResults(rows, rr);
+  document.getElementById('mt4-section').style.display = 'none';
+}
+
+// ── Futures Options Calculator ──
+function calcFutOpt() {
+  const prem = v('futo-prem');
+  const qty  = v('futo-qty') || 1;
+  const mult = v('futo-mult') || 50;
+  const span = v('futo-span');
+  const expiry = document.getElementById('futo-expiry')?.value;
+  const action = s('futo-action');
+
+  if (!prem) { clearResults(); return; }
+
+  const dte      = expiry ? Math.ceil((new Date(expiry) - new Date()) / 86400000) : null;
+  const premium$ = prem * mult * qty;
+  const maxRisk  = action === 'Buy' ? premium$ : null; // unlimited for short
+
+  const rows = [
+    { label: 'Underlying',    val: s('futo-sym') || '—' },
+    { label: 'Strike',        val: v('futo-strike') || '—' },
+    { label: 'Type/Action',   val: s('futo-type') + ' · ' + action },
+    { label: 'DTE',           val: dte != null ? dte + ' days' : '—' },
+    { label: 'Premium',       val: RCM.fmt.money(premium$), cls: action === 'Buy' ? 'negative' : 'positive' },
+    { label: 'Contracts',     val: qty },
+    { label: 'Multiplier',    val: mult },
+  ];
+  if (action === 'Buy') rows.push({ label: 'Max Risk',  val: RCM.fmt.money(maxRisk), cls: 'negative' });
+  if (span)             rows.push({ label: 'SPAN Margin', val: RCM.fmt.money(span * qty) });
+  setResults(rows, null);
+  document.getElementById('mt4-section').style.display = 'none';
+}
+
+// ── Save setup state ──
+let currentSetup = {};
+function saveCurrentSetup(data) {
+  currentSetup = data;
+}
+
+// ── Export ──
+function exportSetup() {
+  if (!currentSetup.type) { alert('Calculate a setup first'); return; }
+  const rows = state.results.rows || [];
+  const lines = [
+    `=== RCM TRADE SETUP — ${currentSetup.type} ===`,
+    `Generated: ${new Date().toLocaleString('en-SG', {timeZone:'Asia/Singapore'})} SGT`,
+    '',
+    ...rows.map(r => `${r.label.padEnd(20)} ${r.val}`),
+    '',
+    `R:R Ratio: 1:${state.results.rr ? state.results.rr.toFixed(2) : '—'}`,
+    '',
+    `Source: RCM Terminal`,
+  ].join('\n');
+
+  navigator.clipboard.writeText(lines).then(() => {
+    const btn = event.target;
+    btn.textContent = '✓ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy Setup', 2000);
+  });
+}
+
+// ── View in terminal ──
+function sendToTerminal() {
+  if (currentSetup.sym) localStorage.setItem('rcm_terminal_sym', currentSetup.sym);
+  window.location.href = '../terminal/index.html';
+}
+
+// ── MT4 File Bridge ──
+async function sendToMT4() {
+  if (!currentSetup.type || !currentSetup.entry) {
+    alert('Calculate a trade setup first');
+    return;
+  }
+  if (!['FX','CFD'].includes(currentSetup.type)) {
+    alert('MT4 bridge is for FX Spot and CFD only');
+    return;
+  }
+
+  const sym   = document.getElementById(state.inst === 'fx' ? 'fx-sym' : 'cfd-sym')?.value?.trim() || '';
+  const dir   = currentSetup.dir;
+  const entry = currentSetup.entry;
+  const stop  = currentSetup.stop;
+  const tp    = currentSetup.tp;
+  const lots  = state.inst === 'fx' ? v('fx-lots') : v('cfd-lots');
+
+  const trade = {
+    timestamp:   new Date().toISOString(),
+    instrument:  currentSetup.type,
+    symbol:      sym,
+    direction:   dir,
+    entry:       entry,
+    stop_loss:   stop,
+    take_profit: tp || 0,
+    lot_size:    lots,
+    risk_usd:    currentSetup.riskUSD,
+    rr_ratio:    currentSetup.rr,
+    status:      'PENDING',
+    source:      'RCM Trade Setup Generator',
+  };
+
+  // Write JSON to HFOS execution folder
+  // In Cowork: use file tools. In browser: show the JSON to copy
+  const json = JSON.stringify(trade, null, 2);
+  const statusEl = document.getElementById('mt4-status');
+
+  if (window.cowork) {
+    statusEl.textContent = 'Writing to MT4 bridge file…';
+    try {
+      // Cowork doesn't have direct file write, but we can display the file content
+      // The actual file write happens via Claude in the HFOS folder
+      navigator.clipboard.writeText(json);
+      statusEl.textContent = '✓ JSON copied — paste to HFOS/EXECUTION/pending_trade.json';
+    } catch {
+      statusEl.textContent = 'Copy the JSON above manually';
+    }
+  } else {
+    // Standalone: show modal with JSON
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'background:var(--navy);color:var(--gold);padding:14px;border-radius:6px;font-size:11px;overflow:auto;margin-top:10px;';
+    pre.textContent = json;
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+    modal.innerHTML = `
+      <div style="background:var(--navyLight);border-radius:8px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow:auto;">
+        <div style="font-weight:700;color:var(--gold);margin-bottom:12px;">MT4 Bridge JSON — Copy to pending_trade.json</div>
+        ${pre.outerHTML}
+        <div style="display:flex;gap:10px;margin-top:14px;">
+          <button onclick="navigator.clipboard.writeText(${JSON.stringify(json)});this.textContent='✓ Copied!'" class="btn btn-gold" style="flex:1;justify-content:center;">Copy JSON</button>
+          <button onclick="this.closest('[style*=fixed]').remove()" class="btn btn-ghost" style="flex:1;justify-content:center;color:#fff;border-color:rgba(255,255,255,.2);">Close</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+}
+
+// ── Boot ──
+setInst('fx');
+</script>
+</body>
+</html>
