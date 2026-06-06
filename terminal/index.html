@@ -296,6 +296,7 @@ document.getElementById('rcm-header-mount').innerHTML = RCM.buildHeader({
   activePage: 'terminal',
 });
 RCM.updateSourceBadge();
+RCM.promptFmpKey(); // show key banner if no data source configured
 
 // ── State ──
 let currentSym = localStorage.getItem('rcm_terminal_sym') || 'EURUSD';
@@ -559,8 +560,7 @@ document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b
 document.querySelectorAll('.ct-btn').forEach(b => b.classList.toggle('active', b.dataset.ct === currentCt));
 document.getElementById('sym-input').value = currentSym;
 
-loadChart();
-updateWatchlist(currentSym);
+loadChart(); // also calls updateWatchlist internally
 </script>
 </body>
 </html>
