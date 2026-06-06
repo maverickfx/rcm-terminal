@@ -62,21 +62,54 @@
   - Put/Call ratio grid
   - Screener across watchlist universe
   - **Requires IB MCP (no FMP fallback for IV)**
-- [ ] `journal/index.html` — Trade Journal & Performance
-  - IB trade history ingestion (get_account_trades)
-  - PnL by asset class breakdown
-  - Win rate / avg win / avg loss
-  - Max drawdown, Sharpe estimate
-  - Equity curve chart (Lightweight Charts line)
+- [ ] `journal/index.html` — Trade Journal & Performance *(read-only analysis — no NLP here)*
+  - Pull closed trades from IB MCP (`get_account_trades`)
+  - Merge with trade tags written at entry by Trade Setup page
+  - Trade log table with filters (date / asset class / setup type / win-loss)
+  - Performance KPIs: Win Rate, Profit Factor, Avg Win/Loss, Expectancy
+  - Breakdown tables: by Setup Type, Conviction level, Regime
+  - Equity curve (LightweightCharts line, drawdown shading)
   - Export to CSV
+  - See: `docs/JOURNAL_DESIGN.md`
 
 ---
 
-## PHASE 3 — Execution Layer
+## PHASE 3 — Trade Setup Enhancements + Execution Layer
 *Target: Week 2–3 · Status: 🔲 Pending*
 
+### Trade Setup Page — NLP Parser
+*Taxonomy and NLP live here at entry time, not in the journal*
+- [ ] NLP parse bar — text input + Parse button above the trade form
+- [ ] `RCM.tradeNLP(text)` in `shared/rcm-utils.js` — regex rule engine
+  - Extracts: symbol, direction, entry, stop, target, risk_usd
+  - Extracts: setup_type, conviction, regime from natural language
+  - Works in browser (no API dependency)
+- [ ] Claude `askClaude` augmentation layer (Cowork only) — fills gaps regex misses
+- [ ] "Parse Otter" button — fetches most recent Otter recording with trigger phrase
+  `"Trade setup:"`, runs NLP, pre-fills entire form
+- [ ] See: `docs/TRADE_SETUP_DESIGN.md`
+
+### Trade Setup Page — Trade Taxonomy
+*Tags set at entry — travel with trade record to journal*
+- [ ] Setup Type chip selector (6 types): `news` `trend` `reversal` `breakout` `range` `flow`
+- [ ] Conviction dot picker: ●●● / ●●○ / ●○○ (3 = high, 1 = probe)
+- [ ] Regime dropdown: `risk-on` `risk-off` `trending` `choppy` (auto from TIDE if live)
+- [ ] Tags appended to trade JSON and saved to localStorage (keyed by IB trade ID)
+- [ ] Tags included in `pending_trade.json` for MT4 bridge
+- [ ] **Pending decision:** conviction multiplier on/off (scales lot size by conv level)
+
+### Trade Setup Page — Position Sizer
+- [ ] Risk inputs: account size (IB auto or manual) + risk % or fixed $ amount
+- [ ] FX sizer: pip calculation, pip value per lot, lot size output
+- [ ] Futures sizer: tick value table (ES, NQ, CL, GC, ZN), contracts output
+- [ ] Equity sizer: share risk = entry − stop, shares output
+- [ ] CFD sizer: point value per lot (user input or Axi reference)
+- [ ] Output panel: lot/contracts/shares, stop distance, RR ratio, margin estimate
+- [ ] RR colour: green ≥2.0, amber 1.0–2.0, red <1.0
+- [ ] See: `docs/TRADE_SETUP_DESIGN.md`
+
 ### MT4 File Bridge (Axi FX/CFD)
-- [ ] Design JSON schema for `pending_trade.json`
+- [ ] `pending_trade.json` schema — includes taxonomy tags
   ```json
   {
     "timestamp": "ISO",
@@ -89,6 +122,10 @@
     "lot_size": 0.10,
     "risk_usd": 300,
     "rr_ratio": 2.0,
+    "setup_type": "news",
+    "conviction": 3,
+    "regime": "risk-on",
+    "notes": "NFP miss, USD weakness",
     "status": "PENDING"
   }
   ```
@@ -101,6 +138,7 @@
   - Write status back to JSON: "EXECUTED" or "CANCELLED"
 - [ ] Test with EURUSD on Axi demo
 - [ ] Document installation path for MT4 EA on Axi
+- [ ] **Pending decision:** fixed path for `pending_trade.json`
 
 ### IB Order Staging (create_order_instruction)
 - [ ] Wire "+ Stage in IB" button on Trade Setup → calls create_order_instruction
