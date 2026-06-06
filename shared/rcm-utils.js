@@ -1,11 +1,15 @@
 /* ─── RCM Platform — Data Utility Layer ────────────────────────────────────
-   Rapid Capital Management | rcm-utils.js v1.0
+   Rapid Capital Management | rcm-utils.js v1.1
 
    ARCHITECTURE:
-   Layer 1 (Enhanced)  — window.cowork.callMcpTool() — IB MCP + FMP MCP
+   Layer 1 (Cowork)    — window.cowork.callMcpTool() — IB MCP + FMP MCP
                          Available in Cowork mode only.
-   Layer 2 (Universal) — FMP REST API via fetch()
-                         Works in any browser. Key stored in localStorage.
+   Layer 2 (Browser)   — TwelveData REST API via fetch()
+                         Primary browser source. Free: 800 req/day.
+                         Key stored in localStorage (rcm_td_api_key).
+   Layer 3 (Fallback)  — FMP REST API via fetch()
+                         Fallback if TwelveData key not set.
+                         Key stored in localStorage (rcm_fmp_api_key).
 
    Usage:
      const data = await RCM.quote('EUR/USD');
@@ -18,8 +22,11 @@ const RCM = (() => {
   /* ── Cowork detection ── */
   const isCowork = () => typeof window !== 'undefined' && !!window.cowork;
 
-  /* ── FMP API key (stored in localStorage) ── */
+  /* ── API keys (stored in localStorage) ── */
+  const TD_KEY_STORAGE  = 'rcm_td_api_key';
   const FMP_KEY_STORAGE = 'rcm_fmp_api_key';
+  const getTdKey  = () => localStorage.getItem(TD_KEY_STORAGE)  || '';
+  const setTdKey  = (k) => localStorage.setItem(TD_KEY_STORAGE, k);
   const getFmpKey = () => localStorage.getItem(FMP_KEY_STORAGE) || '';
   const setFmpKey = (k) => localStorage.setItem(FMP_KEY_STORAGE, k);
 
@@ -33,11 +40,38 @@ const RCM = (() => {
     const toolName = `${server}__${tool}`;
     const r = await window.cowork.callMcpTool(toolName, args);
     if (r.isError) throw new Error(r.content?.[0]?.text || 'MCP error');
-    // Parse structured content or JSON text
     if (r.structuredContent) return r.structuredContent;
     const txt = r.content?.[0]?.text;
     if (!txt) return null;
     try { return JSON.parse(txt); } catch { return txt; }
+  };
+
+  /* ── TwelveData REST helper ── */
+  const td = async (endpoint, params = {}) => {
+    const key = getTdKey();
+    if (!key) throw new Error('TD_KEY_MISSING');
+    const url = new URL(`https://api.twelvedata.com${endpoint}`);
+    url.searchParams.set('apikey', key);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`TwelveData ${res.status}: ${res.statusText}`);
+    const json = await res.json();
+    if (json.status === 'error') throw new Error(json.message || 'TwelveData error');
+    return json;
+  };
+
+  /* ── TwelveData symbol format ── */
+  // FX 6-char pairs → EUR/USD format; equities/ETFs stay as-is
+  const tdSymbol = (sym) => {
+    const s = sym.replace('/', '').toUpperCase();
+    if (/^[A-Z]{6}$/.test(s)) return s.slice(0, 3) + '/' + s.slice(3);
+    return s;
+  };
+
+  /* ── TwelveData interval map ── */
+  const TD_INTERVAL = {
+    '1m':'1min', '5m':'5min', '15m':'15min', '30m':'30min',
+    '1H':'1h',   '4H':'4h',  '1D':'1day',   '1W':'1week',
   };
 
   /* ── FMP REST helper ── */
@@ -94,6 +128,26 @@ const RCM = (() => {
       }
     }
 
+    // TwelveData (primary browser source)
+    if (getTdKey()) {
+      try {
+        const d = await td('/quote', { symbol: tdSymbol(sym) });
+        return {
+          symbol:    sym,
+          bid:       null,
+          ask:       null,
+          last:      parseFloat(d.close),
+          change:    parseFloat(d.change),
+          changePct: parseFloat(d.percent_change),
+          volume:    parseFloat(d.volume) || 0,
+          timestamp: Date.now(),
+          source:    'TD',
+        };
+      } catch (e) {
+        console.warn('TwelveData quote failed, falling back to FMP:', e.message);
+      }
+    }
+
     // FMP fallback
     const data = await fmp('/v3/quote/' + sym);
     const d = Array.isArray(data) ? data[0] : data;
@@ -145,6 +199,31 @@ const RCM = (() => {
         })).sort((a, b) => (a.time > b.time ? 1 : -1));
       } catch (e) {
         console.warn('IB history failed, falling back to FMP:', e.message);
+      }
+    }
+
+    // TwelveData (primary browser source)
+    if (getTdKey()) {
+      try {
+        const interval = TD_INTERVAL[timeframe] || '1day';
+        const data = await td('/time_series', {
+          symbol:     tdSymbol(sym),
+          interval,
+          outputsize: bars,
+          order:      'ASC',
+        });
+        const arr = Array.isArray(data.values) ? data.values : [];
+        return arr.map(b => ({
+          time:   b.datetime,
+          open:   parseFloat(b.open),
+          high:   parseFloat(b.high),
+          low:    parseFloat(b.low),
+          close:  parseFloat(b.close),
+          volume: parseFloat(b.volume) || 0,
+          source: 'TD',
+        }));
+      } catch (e) {
+        console.warn('TwelveData history failed, falling back to FMP:', e.message);
       }
     }
 
@@ -297,11 +376,40 @@ const RCM = (() => {
    */
   const batchQuotes = async (symbols) => {
     if (isCowork()) {
-      // Sequential for IB (no batch endpoint)
       const results = await Promise.allSettled(symbols.map(s => quote(s)));
       return results.map((r, i) => r.status === 'fulfilled' ? r.value : { symbol: symbols[i], error: true });
     }
-    // FMP batch endpoint
+
+    // TwelveData batch (comma-separated symbols)
+    if (getTdKey()) {
+      try {
+        const syms = symbols.map(s => tdSymbol(normSymbol(s))).join(',');
+        const data = await td('/quote', { symbol: syms });
+        // TD returns object keyed by symbol when batching, or single object
+        const normalize = (d, origSym) => ({
+          symbol:    origSym,
+          last:      parseFloat(d.close),
+          change:    parseFloat(d.change),
+          changePct: parseFloat(d.percent_change),
+          volume:    parseFloat(d.volume) || 0,
+          source:    'TD',
+        });
+        if (data && typeof data === 'object' && !data.close) {
+          // Batched response is keyed by TD symbol
+          return symbols.map((s) => {
+            const key = tdSymbol(normSymbol(s));
+            const d = data[key];
+            return d ? normalize(d, s) : { symbol: s, error: true };
+          });
+        }
+        // Single symbol response
+        return [normalize(data, symbols[0])];
+      } catch (e) {
+        console.warn('TwelveData batch failed, falling back to FMP:', e.message);
+      }
+    }
+
+    // FMP batch fallback
     const sym = symbols.map(normSymbol).join(',');
     const data = await fmp('/v3/quote/' + sym);
     return Array.isArray(data) ? data.map(d => ({
@@ -321,9 +429,11 @@ const RCM = (() => {
         await mcp(IB, 'get_account_summary');
         return 'ib';
       } catch {}
-      return 'fmp'; // Cowork but IB not responding
+      return 'fmp';
     }
-    return getFmpKey() ? 'fmp' : 'off';
+    if (getTdKey())  return 'td';
+    if (getFmpKey()) return 'fmp';
+    return 'off';
   };
 
   /* ── Settings helpers ── */
@@ -370,6 +480,9 @@ const RCM = (() => {
     news,
     batchQuotes,
     getSourceStatus,
+    getTdKey,
+    setTdKey,
+    TD_KEY_STORAGE,
     getFmpKey,
     setFmpKey,
     FMP_KEY_STORAGE,
@@ -434,23 +547,38 @@ RCM.updateSourceBadge = async () => {
   try {
     const src = await RCM.getSourceStatus();
     el.className = `source-badge ${src}`;
-    el.textContent = src === 'ib' ? 'IB Live' : src === 'fmp' ? 'FMP' : 'Offline';
+    el.textContent = src === 'ib' ? 'IB Live' : src === 'td' ? 'TwelveData' : src === 'fmp' ? 'FMP' : 'Offline';
   } catch {
     el.className = 'source-badge off';
     el.textContent = 'Offline';
   }
 };
 
-/* ── FMP key prompt (shown once if key missing) ── */
+/* ── API key prompt (shown in browser if no data key set) ── */
 RCM.promptFmpKey = () => {
-  if (RCM.getFmpKey() || RCM.isCowork()) return;
+  if (RCM.isCowork()) return;
+  if (RCM.getTdKey()) return; // TwelveData key present — no prompt needed
+  const hasFmp = RCM.getFmpKey();
+
   const div = document.createElement('div');
-  div.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#C9A14A;color:#0B1D3A;padding:10px 20px;display:flex;align-items:center;gap:12px;z-index:9999;font-size:12px;font-weight:700;';
+  div.id = 'rcm-key-banner';
+  div.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#C9A14A;color:#0B1D3A;padding:10px 20px;display:flex;align-items:center;gap:12px;z-index:9999;font-size:12px;font-weight:700;flex-wrap:wrap;';
+
   div.innerHTML = `
-    <span>⚠ FMP API key required for market data</span>
-    <input id="fmp-key-input" type="text" placeholder="Enter FMP API key…"
-      style="flex:1;max-width:300px;padding:5px 10px;border:none;border-radius:3px;font-size:12px;">
-    <button onclick="RCM.setFmpKey(document.getElementById('fmp-key-input').value);this.closest('div').remove();location.reload();"
-      style="padding:5px 14px;background:#0B1D3A;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:700;">Save</button>`;
+    <span>📊 Add <a href="https://twelvedata.com" target="_blank" style="color:#0B1D3A;text-decoration:underline;">TwelveData</a> key for charts &amp; quotes (free 800 req/day)</span>
+    <input id="td-key-input" type="text" placeholder="TwelveData API key…"
+      style="flex:1;min-width:200px;max-width:280px;padding:5px 10px;border:none;border-radius:3px;font-size:12px;">
+    <button onclick="RCM.setTdKey(document.getElementById('td-key-input').value.trim());document.getElementById('rcm-key-banner').remove();location.reload();"
+      style="padding:5px 14px;background:#0B1D3A;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:700;">Save</button>
+    ${hasFmp ? '' : `<span style="opacity:.7;">· or <a href="#" onclick="event.preventDefault();document.getElementById('rcm-fmp-row').style.display='flex';" style="color:#0B1D3A;">use FMP key instead</a></span>
+    <div id="rcm-fmp-row" style="display:none;width:100%;gap:12px;margin-top:6px;align-items:center;">
+      <input id="fmp-key-input" type="text" placeholder="FMP API key…"
+        style="flex:1;min-width:200px;max-width:280px;padding:5px 10px;border:none;border-radius:3px;font-size:12px;">
+      <button onclick="RCM.setFmpKey(document.getElementById('fmp-key-input').value.trim());document.getElementById('rcm-key-banner').remove();location.reload();"
+        style="padding:5px 14px;background:#0B1D3A;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:700;">Save FMP</button>
+    </div>`}
+    <button onclick="this.closest('#rcm-key-banner').remove();"
+      style="margin-left:auto;padding:5px 10px;background:transparent;border:1px solid #0B1D3A;border-radius:3px;cursor:pointer;font-size:11px;">✕</button>`;
+
   document.body.prepend(div);
 };
